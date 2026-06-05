@@ -16,14 +16,11 @@ export function Logo({ className = "" }: { className?: string }) {
           fill="currentColor"
         />
       </svg>
-      {/* Wordmark carries the brand motif: the circumflex on the "a" is a
-          literal chapeau (French: the "^" accent is the accent circonflexe).
-          Prose/SEO keep the plain "Chapeau" spelling — this is logo-only. */}
       <span
         className="font-serif text-2xl font-semibold tracking-tight"
         style={{ color: "var(--text-0)" }}
       >
-        Ch<span className="italic">â</span>peau
+        Chapeau
       </span>
     </span>
   );
