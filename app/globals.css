@@ -1,0 +1,246 @@
+@import "tailwindcss";
+
+/* ============================================================
+   CHAPEAU — editorial collective design system
+   white base · single cyan accent · slate ink · Fraunces display
+   ============================================================ */
+
+:root {
+  /* surfaces */
+  --bg-0: #ffffff;            /* page base */
+  --bg-1: #f8fafc;            /* cool section */
+  --bg-2: #ffffff;            /* raised card */
+  --bg-3: #f1f5f9;            /* hover / inset surface */
+  --line: rgba(15, 23, 42, 0.08);
+  --line-strong: rgba(15, 23, 42, 0.14);
+
+  /* accent — single, confident cyan (gold retired) */
+  --cyan: #00c8d7;
+  --cyan-deep: #0aa8b5;
+  --cyan-ink: #0a7d88;        /* darker teal for gradient depth */
+  --cyan-soft: #e0fafc;       /* tinted surface */
+  --ink: #0f172a;             /* near-black slate, deep-end of gradients */
+
+  /* text */
+  --text-0: #0f172a;          /* headings, near-slate-black */
+  --text-1: #475569;          /* body */
+  --text-2: #94a3b8;          /* muted (decorative only — not for small labels) */
+
+  /* shadows — soft, neutral, restrained */
+  --shadow-soft: 0 6px 22px -10px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --shadow-lift: 0 16px 44px -18px rgba(15, 23, 42, 0.14), 0 2px 8px rgba(15, 23, 42, 0.05);
+
+  /* motion */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);     /* premium reveal easing */
+}
+
+@theme inline {
+  --color-bg0: var(--bg-0);
+  --color-bg1: var(--bg-1);
+  --color-bg2: var(--bg-2);
+  --color-bg3: var(--bg-3);
+  --color-line: var(--line);
+  --color-cyan: var(--cyan);
+  --color-cyan-deep: var(--cyan-deep);
+  --color-text0: var(--text-0);
+  --color-text1: var(--text-1);
+  --color-text2: var(--text-2);
+  --font-serif: var(--font-display);
+  --font-sans: var(--font-body);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  background-color: var(--bg-0);
+}
+
+body {
+  background-color: var(--bg-0);
+  color: var(--text-1);
+  font-family: var(--font-body), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: rgba(0, 200, 215, 0.20);
+  color: var(--text-0);
+}
+
+/* Light scrollbar */
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: var(--bg-1); }
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+  border: 3px solid var(--bg-1);
+}
+::-webkit-scrollbar-thumb:hover { background: #b4c0d0; }
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* ── Typography helpers ─────────────────────────────── */
+.font-serif { font-family: var(--font-display), Georgia, "Times New Roman", serif; }
+.font-sans  { font-family: var(--font-body), system-ui, sans-serif; }
+
+.display {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 500;
+  /* Fraunces is higher-contrast than Cormorant; ride a touch tighter. */
+  letter-spacing: -0.02em;
+  line-height: 1.0;
+  color: var(--text-0);
+  font-optical-sizing: auto;
+}
+
+.eyebrow {
+  font-size: 0.75rem;
+  /* Was 0.18em / --text-2 (#94a3b8 ≈ 4.7:1): too loose and too light for a
+     12px uppercase label. Tighter tracking + #64748b (~5.9:1) reads cleanly. */
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #64748b;
+  font-weight: 600;
+}
+
+/* Arrow-prefixed eyebrow */
+.eyebrow-arrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--cyan-deep);
+}
+.eyebrow-arrow::before {
+  content: "→";
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* ── Framed grid "sheet" ─────────────────────────────── */
+/* Page sits on a slightly cooler canvas; the frame reads as a sheet. */
+.frame-canvas { background: #f3f5f8; }
+.frame-rail {
+  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  background: var(--bg-0);
+}
+.section-divider { border-top: 1px solid var(--line); }
+/* faint internal column guides for the boxy grid */
+.col-divider > * + * { border-left: 1px solid var(--line); }
+
+/* Glassmorphism surface (nav) */
+.glass {
+  background: rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+}
+
+/* Glassmorphism panel */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: var(--shadow-soft);
+}
+
+/* ============================================================
+   KEYFRAMES — only the ones actually in use (transform / opacity)
+   ============================================================ */
+
+/* Logo marquee */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.animate-marquee { animation: marquee 40s linear infinite; }
+.marquee-pause:hover .animate-marquee { animation-play-state: paused; }
+
+/* Faint editorial grid (hero backdrop) */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+.bg-grid-fade {
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 10%, transparent 75%);
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 10%, transparent 75%);
+}
+
+/* Single soft cyan radial wash (section/hero backdrop) — gold blob retired */
+@keyframes mesh-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  33%      { transform: translate3d(3%, -4%, 0) scale(1.08); }
+  66%      { transform: translate3d(-3%, 3%, 0) scale(0.95); }
+}
+.bg-mesh {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.bg-mesh::before {
+  content: "";
+  position: absolute;
+  width: 62%;
+  height: 62%;
+  top: -10%;
+  left: -5%;
+  border-radius: 9999px;
+  filter: blur(80px);
+  will-change: transform;
+  background: radial-gradient(circle, rgba(0, 200, 215, 0.07), transparent 70%);
+  animation: mesh-drift 24s ease-in-out infinite;
+}
+
+/* Hover shine sweep (buttons) */
+@keyframes shine-sweep {
+  0%   { transform: translateX(-130%) skewX(-18deg); opacity: 0; }
+  20%  { opacity: 0.55; }
+  100% { transform: translateX(240%) skewX(-18deg); opacity: 0; }
+}
+.shine {
+  position: relative;
+  overflow: hidden;
+}
+.shine::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 45%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.65), transparent);
+  transform: translateX(-130%) skewX(-18deg);
+  pointer-events: none;
+}
+.shine:hover::before { animation: shine-sweep 0.9s ease; }
+
+/* ── Reduced motion ─────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
