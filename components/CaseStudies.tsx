@@ -21,14 +21,14 @@ export default function CaseStudies() {
       <div className="bg-mesh opacity-40" aria-hidden />
       <div className="relative px-6 lg:px-12">
         <div className="mb-14 grid grid-cols-1 gap-6 lg:mb-16 lg:grid-cols-12 lg:items-end">
-          <Reveal variant="blur" className="lg:col-span-7">
-            <p className="eyebrow-arrow mb-4">Selected work</p>
+          <Reveal variant="blur" className="text-center lg:col-span-7 lg:text-left">
+            <p className="eyebrow-arrow mb-4 justify-center lg:justify-start">Selected work</p>
             <h2 className="display text-4xl sm:text-5xl lg:text-6xl">
               Outcomes, not <span className="italic" style={{ color: "var(--cyan-deep)" }}>output</span>
             </h2>
           </Reveal>
           <Reveal delay={0.08} className="lg:col-span-5 lg:pb-2">
-            <p className="text-lg leading-relaxed text-text1 lg:text-right">
+            <p className="text-center text-lg leading-relaxed text-text1 lg:text-right">
               A few of the brands we&apos;ve helped build smarter growth engines.
             </p>
           </Reveal>

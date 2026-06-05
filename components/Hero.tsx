@@ -59,7 +59,7 @@ export default function Hero() {
 
       <div className="relative grid grid-cols-1 items-center gap-12 lg:grid-cols-12 lg:gap-8">
         {/* ── Left: content ── */}
-        <motion.div style={{ y: contentY }} className="lg:col-span-6">
+        <motion.div style={{ y: contentY }} className="text-center lg:col-span-6 lg:text-left">
           <motion.div
             className="glass-panel mb-7 inline-flex items-center gap-2.5 rounded-full px-4 py-1.5"
             initial={{ opacity: 0, y: 12 }}
@@ -78,7 +78,7 @@ export default function Hero() {
           <HeadlineReveal text={HERO.headline} />
 
           <motion.p
-            className="mt-7 max-w-lg text-lg leading-relaxed text-text1 sm:text-xl"
+            className="mx-auto mt-7 max-w-lg text-lg leading-relaxed text-text1 sm:text-xl lg:mx-0"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.55, ease: EASE }}
@@ -87,7 +87,7 @@ export default function Hero() {
           </motion.p>
 
           <motion.div
-            className="mt-10 flex flex-wrap items-center gap-4"
+            className="mt-10 flex flex-wrap items-center justify-center gap-4 lg:justify-start"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.7, ease: EASE }}

@@ -67,6 +67,11 @@ body {
   font-family: var(--font-body), system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Clip any sub-pixel horizontal overflow (deck stagger / hero bg layers) on
+     small screens. Applied to body (propagates to the viewport) rather than an
+     ancestor of the sticky deck — `overflow-x: hidden` on an in-flow ancestor
+     would compute overflow-y to `auto` and break the deck's position: sticky. */
+  overflow-x: hidden;
 }
 
 ::selection {

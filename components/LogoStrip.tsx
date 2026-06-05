@@ -13,7 +13,7 @@ export default function LogoStrip() {
   return (
     <section className="section-divider px-6 py-10 lg:px-12 lg:py-12">
       <div className="grid grid-cols-1 items-center gap-6 lg:grid-cols-12 lg:gap-8">
-        <p className="text-sm leading-snug text-text2 lg:col-span-3">
+        <p className="text-center text-sm leading-snug text-text2 lg:col-span-3 lg:text-left">
           Trusted by teams
           <br className="hidden lg:block" /> who lead growth.
         </p>

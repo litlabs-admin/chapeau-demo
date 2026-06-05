@@ -79,23 +79,30 @@ function DeckCard({
   index: number;
   progress: MotionValue<number>;
 }) {
-  // Scale down + dim as later cards stack on top. Deeper cards (lower index)
-  // shrink more so the stack reads as depth. Input range clamped to [0,1].
+  // Scale down + dim as the NEXT card stacks on top. Deeper cards (lower index)
+  // shrink more so the stack reads as depth. Crucially the scale/dim is driven
+  // only over the window where the next card arrives — [index/N, (index+1)/N] —
+  // so the front card holds at full size until something lands over it, then
+  // recedes and stays put (useTransform clamps outside the range). Driving it to
+  // progress=1 instead made the front card shrink prematurely — the old flaw.
   const targetScale = 1 - (N - 1 - index) * 0.04;
-  const start = index / N;
-  const scale = useTransform(progress, [start, 1], [1, targetScale]);
-  const overlay = useTransform(progress, [start, 1], [0, index === N - 1 ? 0 : 0.06]);
+  const range = [index / N, (index + 1) / N];
+  const scale = useTransform(progress, range, [1, targetScale]);
+  const overlay = useTransform(progress, range, [0, index === N - 1 ? 0 : 0.4]);
 
-  // Canonical stacking deck: each card lives in its own h-screen sticky wrapper
-  // (contiguous, so the NEXT card slides up and tightly covers the current one).
-  // A per-card downward `top` stagger lets earlier cards peek behind. The last
-  // card's wrapper ends the container, so Case Studies scrolls up over it — no
-  // gap. (Requires NO overflow-hidden ancestor, or sticky silently breaks.)
+  // Per-card downward stagger so earlier cards peek behind the next — responsive
+  // (subtler on phones, wider on desktop) so the deck edges read evenly at every
+  // width. Small viewport unit (svh) keeps the pin from jumping as mobile browser
+  // chrome shows/hides. (Requires NO overflow-hidden ancestor, or sticky breaks.)
   return (
-    <div className="sticky top-0 flex h-screen items-center justify-center px-6 lg:px-12">
+    <div className="sticky top-0 flex h-[100svh] items-center justify-center px-6 lg:px-12">
       <motion.div
-        style={{ scale, top: index * 22, transformOrigin: "top center" }}
-        className="relative mx-auto w-full max-w-[940px]"
+        style={{
+          scale,
+          top: `calc(var(--deck-stagger) * ${index})`,
+          transformOrigin: "top center",
+        }}
+        className="relative mx-auto w-full max-w-[940px] [--deck-stagger:14px] lg:[--deck-stagger:24px]"
       >
         <Card service={service} index={index} overlay={overlay} />
       </motion.div>
@@ -119,7 +126,7 @@ function Card({
   // Clean white cards, hairline border, soft neutral shadow. Cyan number only.
   return (
     <article
-      className="relative flex min-h-[420px] flex-col items-center justify-center overflow-hidden rounded-[28px] px-6 py-14 text-center sm:px-12 sm:py-16 lg:min-h-[460px]"
+      className="relative flex min-h-[380px] flex-col items-center justify-center overflow-hidden rounded-[28px] px-6 py-10 text-center sm:px-12 sm:py-14 lg:min-h-[460px] lg:py-16"
       style={{
         background: "var(--bg-0)",
         border: "1px solid var(--line)",
@@ -144,7 +151,7 @@ function Card({
         </span>
 
         <h3
-          className="mt-5 font-serif text-4xl font-semibold leading-[1.04] text-text0 sm:text-5xl lg:text-6xl"
+          className="mt-5 font-serif text-3xl font-semibold leading-[1.04] text-text0 sm:text-4xl lg:text-6xl"
         >
           {service.title}
         </h3>
