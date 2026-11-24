@@ -58,13 +58,30 @@ Source times are in `pipeline/cutlist.py`; the conformed cut list is `build/cutl
 No line was spliced into a statement Ben didn't make; joins are between whole sentences or at
 natural pauses, ~0.13 s gaps kept (launch-cut pause table).
 
-## Brand
+## Look: copied from the reference, coloured Seekworthy
 
-From seekworthy.ai's own stylesheet: navy `#0f1b4c`, lime `#b8ff3c`, accent blue `#3f5efb`
-(`#2743c9` / `#647cf4`), surface `#f3f5fa`, body `#2b3560`, muted `#5b6386`. Type: Geist (headlines
-700, UI 400–600), Barlow Condensed (eyebrows and numbers). Logo `assets/brand/mark.png` and AI engine
-icons `assets/engines/*.svg` downloaded from seekworthy.ai. Product UI is rebuilt from the site's
-sample data (Venture PR, Northlight PR, Brightwell, Cedar & Pine, Marlow Partners).
+Reference: "Best AI Product Launch Video | Arist" (ObiN Studio). YouTube blocks downloads from this
+environment, so the style was read from YouTube's four public frames of the film and the studio's
+public showreels on obinstudio.com (study only; nothing from them is in the video):
+
+- **Type:** the film uses Söhne (Klim, commercial; Arist's site loads Söhne Buch/Leicht). Used here:
+  **Inter Tight** (light 300 / regular 400, tight tracking), the closest open-licence match, plus
+  **Instrument Serif Italic** for the one emphasised word, the studio's signature. To use a licensed
+  Söhne, change `--sans` in `pipeline/gfx/index.html`.
+- **Hero frame:** a huge light word ("Meet") behind the speaker with a white-to-brand gradient
+  fill, and the product name in two lines over his body, as in the reference's "Meet / Arist Diagnostic".
+- **Colour bloom:** two-colour light rising from the bottom corners over the picture (the reference's
+  blue + brand red becomes the Seekworthy logo's cyan + deep blue, with a lime accent), swelling on
+  every title moment.
+- **Motion:** words focus-pull in one at a time (blur to sharp, slight rise, expo ease); exits blur away.
+- **Product beats:** deep near-black navy spaces with glow, thin frame lines and grain; light UI cards
+  floating in 3D; a hand cursor; a large prompt field with a round send button.
+- **Captions:** small, quiet, word by word, no box.
+
+Colours (Seekworthy only): navy `#0f1b4c`, lime `#b8ff3c`, blue `#3f5efb` (`#2743c9` / `#647cf4`),
+logo gradient `#002afe` -> `#00baff`, mist `#c9d2ff`, surface `#f3f5fa`. Logo `assets/brand/mark.png`
+and AI engine icons `assets/engines/*.svg` from seekworthy.ai. Product UI uses the site's own sample
+data (Venture PR, Northlight PR, Brightwell, Cedar & Pine, Marlow Partners).
 
 ## Sound
 
@@ -78,8 +95,8 @@ sample data (Venture PR, Northlight PR, Brightwell, Cedar & Pine, Marlow Partner
 
 ## Assumptions / open items
 
-- The reference video (YouTube AiZ53c_ZVqI, "Arist" launch by ObiN Studio) could not be downloaded
-  from this environment; its style was matched from its thumbnail and the format (founder talking
-  head, kinetic type behind the speaker, brand colour glows, full-screen product UI beats).
+- The full reference film could not be downloaded here, so its pacing and exact transitions were
+  inferred from four frames and the studio's reels. Dropping the MP4 into the Drive folder would let
+  the timing be matched cut for cut.
 - Ben's surname isn't in the brief, so the lower third reads "Ben — Founder, Seekworthy".
 - Captions are burned in (the brief says captions will be added).

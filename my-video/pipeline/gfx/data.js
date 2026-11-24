@@ -4,312 +4,374 @@ window.CAPTIONS = [
 {
 "t": "Your next customer",
 "s": -0.03,
-"e": 1.12
+"e": 1.12,
+"i": 0
 },
 {
 "t": "could ask AI",
 "s": 1.12,
-"e": 1.85
+"e": 1.85,
+"i": 3
 },
 {
 "t": "for a recommendation",
 "s": 1.85,
-"e": 3.03
+"e": 3.03,
+"i": 6
 },
 {
 "t": "and never hear your name.",
 "s": 3.03,
-"e": 5.21
+"e": 5.21,
+"i": 9
 },
 {
 "t": "They ask ChatGPT",
 "s": 5.21,
-"e": 6.15
+"e": 6.15,
+"i": 14
 },
 {
 "t": "which company to work with.",
 "s": 6.15,
-"e": 8.21
+"e": 8.21,
+"i": 17
 },
 {
 "t": "It gives them a shortlist.",
 "s": 8.21,
-"e": 9.45
+"e": 9.45,
+"i": 22
 },
 {
 "t": "Your competitor's on it.",
 "s": 9.45,
-"e": 10.59
+"e": 10.59,
+"i": 27
 },
 {
 "t": "You're not.",
 "s": 10.59,
-"e": 11.35
+"e": 11.35,
+"i": 31
 },
 {
 "t": "Would you know?",
 "s": 11.42,
-"e": 12.25
+"e": 12.25,
+"i": 33
 },
 {
 "t": "I'm Ben,",
 "s": 12.54,
-"e": 13.41
+"e": 13.41,
+"i": 36
 },
 {
 "t": "founder of Seekworthy.",
 "s": 13.79,
-"e": 14.99
+"e": 14.99,
+"i": 38
 },
 {
 "t": "We help businesses see",
 "s": 14.99,
-"e": 16.67
+"e": 16.67,
+"i": 41
 },
 {
 "t": "how they show up",
 "s": 16.67,
-"e": 17.43
+"e": 17.43,
+"i": 45
 },
 {
 "t": "in AI answers.",
 "s": 17.43,
-"e": 18.71
+"e": 18.71,
+"i": 49
 },
 {
 "t": "But when a buyer",
 "s": 18.71,
-"e": 19.35
+"e": 19.35,
+"i": 52
 },
 {
 "t": "asks AI for advice,",
 "s": 19.35,
-"e": 21.39
+"e": 21.39,
+"i": 56
 },
 {
 "t": "you need to know",
 "s": 21.39,
-"e": 21.93
+"e": 21.93,
+"i": 60
 },
 {
 "t": "if you show up",
 "s": 21.93,
-"e": 22.65
+"e": 22.65,
+"i": 64
 },
 {
 "t": "as part of the answer.",
 "s": 22.65,
-"e": 23.85
+"e": 23.85,
+"i": 68
 },
 {
 "t": "That's why we built",
 "s": 23.89,
-"e": 24.75
+"e": 24.75,
+"i": 73
 },
 {
 "t": "Seekworthy.",
 "s": 24.75,
-"e": 25.61
+"e": 25.61,
+"i": 77
 },
 {
 "t": "It helps you understand",
 "s": 26.97,
-"e": 28.01
+"e": 28.01,
+"i": 78
 },
 {
 "t": "how your business shows up",
 "s": 28.01,
-"e": 29.97
+"e": 29.97,
+"i": 82
 },
 {
 "t": "across AI platforms.",
 "s": 29.97,
-"e": 31.47
+"e": 31.47,
+"i": 87
 },
 {
 "t": "You start with your website",
 "s": 32.1,
-"e": 33.41
+"e": 33.41,
+"i": 90
 },
 {
 "t": "and review the questions",
 "s": 33.43,
-"e": 34.25
+"e": 34.25,
+"i": 95
 },
 {
 "t": "that your buyers",
 "s": 34.25,
-"e": 34.95
+"e": 34.95,
+"i": 99
 },
 {
 "t": "are likely to ask.",
 "s": 34.95,
-"e": 36.33
+"e": 36.33,
+"i": 102
 },
 {
 "t": "Seekworthy checks",
 "s": 36.87,
-"e": 37.43
+"e": 37.43,
+"i": 106
 },
 {
 "t": "those questions",
 "s": 37.43,
-"e": 38.09
+"e": 38.09,
+"i": 108
 },
 {
 "t": "and shows you where",
 "s": 38.09,
-"e": 39.37
+"e": 39.37,
+"i": 110
 },
 {
 "t": "your brand gets mentioned.",
 "s": 39.37,
-"e": 40.75
+"e": 40.75,
+"i": 114
 },
 {
 "t": "It also shows",
 "s": 41.037,
-"e": 41.69
+"e": 41.69,
+"i": 118
 },
 {
 "t": "which competitors appear",
 "s": 41.69,
-"e": 42.77
+"e": 42.77,
+"i": 121
 },
 {
 "t": "and which sources",
 "s": 42.77,
-"e": 45.29
+"e": 45.29,
+"i": 124
 },
 {
 "t": "the answers cite.",
 "s": 45.29,
-"e": 46.41
+"e": 46.41,
+"i": 127
 },
 {
 "t": "So you can go beyond",
 "s": 47.17,
-"e": 48.4
+"e": 48.4,
+"i": 130
 },
 {
 "t": "checking your name once",
 "s": 48.4,
-"e": 49.17
+"e": 49.17,
+"i": 135
 },
 {
 "t": "and hoping that tells",
 "s": 49.17,
-"e": 49.97
+"e": 49.97,
+"i": 139
 },
 {
 "t": "the whole story.",
 "s": 49.97,
-"e": 50.85
+"e": 50.85,
+"i": 143
 },
 {
 "t": "You've got to check",
 "s": 50.85,
-"e": 51.41
+"e": 51.41,
+"i": 146
 },
 {
 "t": "and fix the gaps.",
 "s": 51.41,
-"e": 52.69
+"e": 52.69,
+"i": 150
 },
 {
 "t": "Correct an inaccurate description.",
 "s": 52.76,
-"e": 54.41
+"e": 54.41,
+"i": 154
 },
 {
 "t": "Improve a page.",
 "s": 54.41,
-"e": 55.4
+"e": 55.4,
+"i": 158
 },
 {
 "t": "Create content",
 "s": 55.4,
-"e": 55.99
+"e": 55.99,
+"i": 161
 },
 {
 "t": "that answers a question",
 "s": 55.99,
-"e": 56.97
+"e": 56.97,
+"i": 163
 },
 {
 "t": "you've been missing.",
 "s": 56.97,
-"e": 57.83
+"e": 57.83,
+"i": 167
 },
 {
 "t": "And check again",
 "s": 57.83,
-"e": 58.39
+"e": 58.39,
+"i": 170
 },
 {
 "t": "to see what's changed.",
 "s": 58.39,
-"e": 59.63
+"e": 59.63,
+"i": 173
 },
 {
 "t": "No one can promise you",
 "s": 60.4,
-"e": 61.47
+"e": 61.47,
+"i": 177
 },
 {
 "t": "a place in every AI answer.",
 "s": 61.47,
-"e": 63.22
+"e": 63.22,
+"i": 182
 },
 {
 "t": "The point is to stop guessing",
 "s": 63.22,
-"e": 64.39
+"e": 64.39,
+"i": 188
 },
 {
 "t": "and to start working",
 "s": 64.39,
-"e": 65.35
+"e": 65.35,
+"i": 194
 },
 {
 "t": "from evidence.",
 "s": 65.35,
-"e": 66.37
+"e": 66.37,
+"i": 198
 },
 {
 "t": "Go to seekworthy.ai.",
 "s": 66.46,
-"e": 68.12
+"e": 68.12,
+"i": 200
 },
 {
 "t": "Enter your website",
 "s": 68.12,
-"e": 69.23
+"e": 69.23,
+"i": 203
 },
 {
 "t": "and start with a free check.",
 "s": 69.5,
-"e": 70.57
+"e": 70.57,
+"i": 206
 },
 {
 "t": "No card needed.",
 "s": 70.57,
-"e": 71.55
+"e": 71.55,
+"i": 212
 },
 {
 "t": "Find out whether AI",
 "s": 71.61,
-"e": 72.69
+"e": 72.69,
+"i": 215
 },
 {
 "t": "is recommending",
 "s": 72.69,
-"e": 73.49
+"e": 73.49,
+"i": 219
 },
 {
 "t": "your business.",
 "s": 73.49,
-"e": 74.51
+"e": 74.51,
+"i": 221
 }
 ];
 window.TOTAL_FRAMES = 2319;
