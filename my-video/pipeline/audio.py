@@ -1,27 +1,38 @@
-"""Sound: cleaned dialogue + edited music bed (ducked under speech) + SFX cues.
+"""Sound: restored dialogue + "march 2" music bed (ducked) + designed SFX.
 
-Music: "Minimal Emotion" (Mixkit, track 160, Mixkit Stock Music Free License).
-Its section change at bar 16 (29.79 s) is placed on the logo reveal (edit
-26.0 s); a bar-36 -> bar-56 jump (on 4-bar phrase lines) lands the track's
-outro under the call to action. SFX: Mixkit Sound Effects Free License.
+Dialogue: Ben's phone-mic take restored with Resemble Enhance (denoise +
+enhancement, see pipeline/enhance_voice.sh), then a light broadcast chain.
+
+Music: "march 2" by Ondrosik (Free Music Archive, CC0 1.0). Starts on bar
+at 8.73 s so the track's section change lands on the Seekworthy reveal
+(edit 26.0 s); one bar-aligned jump (44.21 -> 75.51 s, chosen by
+chroma/MFCC similarity) lands the track's own ending on the end card.
+
+SFX: Freesound CC0 sounds (credits in work/audio/fs/CREDITS.txt, copied to
+VIDEO.md). Every cue is placed by its loudest point on the visual event it
+belongs to; typing gets one keystroke per character as it appears.
 
 Writes build/mix.wav (48 kHz stereo, -14 LUFS integrated, -1 dBTP).
 """
+import glob
 import json
+import os
 import subprocess
+import sys
 
 import numpy as np
 
 SR = 48000
 FPS = 30
-ROOT = "work/audio"
+FS = "work/audio/fs"
 cl = json.load(open("build/cutlist.json"))
 words = json.load(open("build/words.json"))
 DUR = cl["frames"] / FPS
 N = int(DUR * SR)
+DIALOGUE = sys.argv[1] if len(sys.argv) > 1 else "build/enh/dialogue_enhanced.wav"
 
 
-def load(path, ss=None, t=None, af=None):
+def load(path, ss=None, t=None, af=None, ch=2):
     cmd = ["ffmpeg", "-v", "error"]
     if ss is not None:
         cmd += ["-ss", str(ss)]
@@ -30,173 +41,174 @@ def load(path, ss=None, t=None, af=None):
     cmd += ["-i", path]
     if af:
         cmd += ["-af", af]
-    cmd += ["-ac", "2", "-ar", str(SR), "-f", "f32le", "-"]
+    cmd += ["-ac", str(ch), "-ar", str(SR), "-f", "f32le", "-"]
     raw = subprocess.run(cmd, capture_output=True, check=True).stdout
-    return np.frombuffer(raw, np.float32).reshape(-1, 2).copy()
+    return np.frombuffer(raw, np.float32).reshape(-1, ch).copy()
 
 
 def db(x):
     return 10 ** (x / 20)
 
 
-def fade(x, fi=0.005, fo=0.03):
-    n = len(x)
-    a, b = int(fi * SR), int(fo * SR)
-    if a:
-        x[:a] *= np.linspace(0, 1, a)[:, None]
-    if b:
-        x[n - b:] *= np.linspace(1, 0, b)[:, None]
-    return x
-
-
 # ---------------------------------------------------------------- dialogue
-dlg = load("build/dialogue_raw.wav",
-           af="highpass=f=85,afftdn=nr=8:nf=-48,equalizer=f=280:t=q:w=1.2:g=-3,"
-              "equalizer=f=3600:t=q:w=1.0:g=2.5,equalizer=f=9000:t=q:w=1:g=1,"
-              "acompressor=threshold=-22dB:ratio=3:attack=8:release=120:makeup=2,"
-              "deesser=i=0.35,loudnorm=I=-16:TP=-2:LRA=7")
+# The restoration already removed noise and reverb and rebuilt the top end;
+# this is only shaping: rumble out, a little warmth back, gentle level
+# control, de-ess, loudness.
+dlg = load(DIALOGUE, ch=1,
+           af="highpass=f=70,"
+              "equalizer=f=4500:t=q:w=1.2:g=1.0,"
+              "acompressor=threshold=-20dB:ratio=2.5:attack=6:release=150:makeup=1.5,"
+              "deesser=i=0.3,alimiter=limit=0.89,loudnorm=I=-16:TP=-2:LRA=6")
 dlg = np.pad(dlg, ((0, max(0, N - len(dlg))), (0, 0)))[:N]
+dlg = np.repeat(dlg, 2, axis=1)
 
 # ---------------------------------------------------------------- music
-BEAT0, BEAT = 0.07, 60 / 129.2
-bar = lambda n: BEAT0 + n * 4 * BEAT  # noqa: E731
-m_in, m_jump_from, m_jump_to = bar(2), bar(36), bar(56)
-mus = load(f"{ROOT}/music/160.mp3", af="loudnorm=I=-16:TP=-2")
-a = mus[int(m_in * SR):int(m_jump_from * SR)].copy()
-b = mus[int(m_jump_to * SR):].copy()
-X = int(0.04 * SR)  # 40 ms equal-power crossfade at the jump
-ramp = np.linspace(0, 1, X)[:, None]
-joined = np.concatenate([a[:-X], a[-X:] * np.cos(ramp * np.pi / 2) + b[:X] * np.sin(ramp * np.pi / 2), b[X:]])
+M_START, JUMP_FROM, JUMP_TO = 8.7307, 44.21, 75.51
+mus = load(f"{'work/audio/music'}/march2.mp3", af="loudnorm=I=-16:TP=-2")
+a = mus[int(M_START * SR):int(JUMP_FROM * SR)]
+b = mus[int(JUMP_TO * SR):]
+X = int(0.06 * SR)  # 60 ms equal-power crossfade on the bar line
+r = np.linspace(0, 1, X)[:, None]
+joined = np.concatenate([a[:-X], a[-X:] * np.cos(r * np.pi / 2) + b[:X] * np.sin(r * np.pi / 2), b[X:]])
 music = np.zeros((N, 2), np.float32)
 music[:min(N, len(joined))] = joined[:N]
-music[: int(0.6 * SR)] *= np.linspace(0, 1, int(0.6 * SR))[:, None]
-music[N - int(1.6 * SR):] *= np.linspace(1, 0, int(1.6 * SR))[:, None] ** 1.5
-print(f"music: in {m_in:.2f}s, jump {m_jump_from:.2f}->{m_jump_to:.2f} at edit {m_jump_from - m_in:.2f}s, "
-      f"drop (bar 16 = {bar(16):.2f}) at edit {bar(16) - m_in:.2f}s")
+music[: int(0.4 * SR)] *= np.linspace(0, 1, int(0.4 * SR))[:, None]
+music[N - int(0.8 * SR):] *= np.linspace(1, 0, int(0.8 * SR))[:, None]
+print(f"music: start {M_START:.2f}s; jump at edit {JUMP_FROM - M_START:.2f}s; "
+      f"section change at edit {34.8 - M_START:.2f}s; ending at edit {JUMP_FROM - M_START + 117.6 - JUMP_TO:.2f}s")
 
-# duck: bed sits ~17 dB under the voice while he talks, lifts between lines
 speech = np.zeros(int(DUR * 100) + 1, np.float32)
 for w in words:
-    speech[int((w["s"] - 0.12) * 100):int((w["e"] + 0.2) * 100)] = 1
-UNDER, OPEN = -17.0, -8.5
+    speech[int((w["s"] - 0.12) * 100):int((w["e"] + 0.22) * 100)] = 1
+UNDER, OPEN = -16.0, -7.0
 g = np.where(speech > 0, UNDER, OPEN).astype(np.float32)
-# smooth: 250 ms ramps
-k = np.ones(25, np.float32) / 25
-g = np.convolve(np.pad(g, (12, 12), mode="edge"), k, mode="valid")[: len(speech)]
-gain = np.interp(np.arange(N) / SR, np.arange(len(g)) / 100, g)
-music *= db(gain)[:, None].astype(np.float32)
+k = np.ones(30, np.float32) / 30
+g = np.convolve(np.pad(g, (15, 14), mode="edge"), k, mode="valid")[: len(speech)]
+music *= db(np.interp(np.arange(N) / SR, np.arange(len(g)) / 100, g))[:, None].astype(np.float32)
 
 # ---------------------------------------------------------------- SFX
-_cache = {}
+_c = {}
 
 
-def sfx(id_, ss=None, t=None):
-    key = (id_, ss, t)
-    if key not in _cache:
-        x = load(f"{ROOT}/sfx/{id_}.mp3", ss=ss, t=t)
+def sfx(name, t=None, fade_out=None):
+    key = (name, t, fade_out)
+    if key not in _c:
+        x = load(f"{FS}/{name}.mp3" if os.path.exists(f"{FS}/{name}.mp3") else name, t=t)
         x = x / (np.abs(x).max() + 1e-9) * db(-1)
-        _cache[key] = fade(x, 0.002, 0.03 if t else 0.01)
-    return _cache[key]
+        n = len(x)
+        x[: int(0.002 * SR)] *= np.linspace(0, 1, int(0.002 * SR))[:, None]
+        fo = int((fade_out or 0.02) * SR)
+        x[n - fo:] *= np.linspace(1, 0, fo)[:, None]
+        _c[key] = (x, int(np.argmax(np.abs(x).max(1))))
+    return _c[key]
 
 
 fx = np.zeros((N, 2), np.float32)
 
 
-def cue(at, id_, gdb, ss=None, t=None):
-    x = sfx(id_, ss, t) * db(gdb)
-    i = int(at * SR)
+def put(x, i, gdb, pan=0.0):
+    x = x * db(gdb)
+    if pan:
+        x = x * np.array([np.sqrt(0.5 - pan / 2) * 1.414, np.sqrt(0.5 + pan / 2) * 1.414], np.float32)
+    i = max(0, i)
     j = min(N, i + len(x))
     if i < N:
         fx[i:j] += x[: j - i]
 
 
-WHOOSH, SWEEP, SLIDE = 174, 166, 3115
-ZOOM, POP, POP2, POPL, CLICK = 2618, 3005, 2356, 2358, 2568
-CHECK, TICK, TONE = 1120, 2866, 2520
+def hit(at, name, gdb, align="peak", pan=0.0, t=None, fade_out=None):
+    """Place a sound so its loudest point (or its start) lands on `at`."""
+    x, pk = sfx(name, t, fade_out)
+    put(x, int(at * SR) - (pk if align == "peak" else 0), gdb, pan)
 
-# hook
-cue(1.26, POP, -22)
-cue(1.45, 2537, -13, ss=1.2, t=1.45)          # typing the prompt
-cue(3.04, CLICK, -14)
-# shortlist screen
-cue(5.02, WHOOSH, -12)
-cue(8.24, 2354, -14)
+
+KEYS = [load(p) for p in sorted(glob.glob(f"{FS}/keys/k*.wav"))]
+rng = np.random.default_rng(11)
+
+
+def typing(text, t0, t1, gdb=-21):
+    """One keystroke per character, at the frame the character appears."""
+    n = len(text)
+    for i in range(1, n + 1):
+        at = t0 + (i - 0.5) / n * (t1 - t0)
+        if text[i - 1] == " ":
+            continue
+        k = KEYS[rng.integers(len(KEYS))]
+        put(k, int(at * SR), gdb + rng.uniform(-2.5, 1.5), pan=rng.uniform(-0.15, 0.15))
+
+
+# hook: prompt typed and sent
+hit(1.36, "whoosh_short", -22)
+typing("Which PR agency should we hire?", 1.5, 2.85)
+hit(3.06, "ui_click", -11)
+# AI shortlist
+hit(5.32, "whoosh_light", -11)
+hit(8.26, "notify", -23)
 for i in range(3):
-    cue(8.5 + i * 0.16, POP2, -21)
-cue(9.6, 168, -22)
-cue(9.95, 2364, -20)
-cue(10.6, SWEEP, -21)
-cue(10.84, 2946, -16)                          # "not mentioned"
-cue(11.2, ZOOM, -12)
-cue(11.45, 772, -15)                           # "Would you know?"
-cue(12.58, SWEEP, -22)                         # lower third
-for i, d in enumerate([0, 2, 4, 1, 3, 5]):     # engine chips
-    cue(15.42 + d * 0.13, POPL, -24)
-cue(17.62, TICK, -26)
-cue(19.48, POP, -24)
-cue(20.62, 2364, -24)
-cue(23.18, 2364, -22)
-# logo reveal + dashboard
-cue(24.74, POPL, -18)
-cue(25.15, 2669, -13)                          # swell into the iris
-cue(25.98, 2902, -9)                           # logo hit on the music lift
-cue(27.0, 3120, -16)
+    hit(8.55 + i * 0.15, "ui_select", -25, pan=-0.2 + i * 0.2)
+hit(9.62, "shimmer_coin", -19)
+hit(9.98, "ui_hint", -20)
+hit(10.66, "whoosh_short", -23)
+hit(10.88, "impact_low", -17, t=0.9, fade_out=0.5)        # "Not mentioned"
+hit(11.3, "woosh_quick", -12)
+hit(12.9, "whoosh_short", -25)                            # name over Ben
+for i, d in enumerate([0, 2, 4, 1, 3, 5]):                # AI engines float in
+    hit(15.5 + d * 0.13, "pop", -27, pan=(-0.5 if i < 3 else 0.5))
+hit(19.55, "whoosh_short", -25)
+# Meet Seekworthy -> brand -> dashboard
+hit(25.78, "revcym_glassy", -15)
+hit(26.0, "subdrop", -10)
+hit(26.05, "shimmer_success", -15)
+hit(27.3, "whoosh_light", -14)
 for i in range(3):
-    cue(28.45 + i * 0.1, 2364, -26)
-cue(29.9, 2634, -22)
-cue(31.85, ZOOM, -13)
-# website -> questions -> engines
-cue(32.1, SWEEP, -22)
-cue(32.3, 2537, -13, ss=4.0, t=0.7)
-cue(33.08, CLICK, -13)
-cue(33.4, WHOOSH, -12)
-for at in (34.3, 34.62, 34.95):
-    cue(at, TONE, -22)
-cue(36.52, SLIDE, -12)
+    hit(28.55 + i * 0.1, "ui_hint", -27)
+for i in range(4):
+    hit(30.0 + i * 0.12, "ui_select", -27)
+hit(32.0, "woosh_quick", -13)
+# website -> buyer questions -> engines
+hit(32.2, "whoosh_short", -23)
+typing("venturepr.com", 32.3, 32.9)
+hit(33.11, "ui_click", -11)
+hit(33.66, "whoosh_light", -11)
+for at in (34.32, 34.64, 34.97):
+    hit(at, "chime", -19)
+hit(36.76, "woosh_slide", -12)
 for i in range(6):
-    cue(37.35 + i * 0.19, TICK, -25 + i * 0.6)
-cue(38.58, SWEEP, -21)
-cue(39.58, 2870, -17)                          # brand mention found
-cue(40.92, SLIDE, -12)
+    hit(37.37 + i * 0.19, "ui_hint", -24 + i * 0.5, pan=-0.5 + i * 0.2)
+hit(38.68, "whoosh_short", -21)
+hit(39.64, "shimmer_coin", -16)
+hit(40.0, "notify", -19)
+hit(41.16, "woosh_slide", -12)
 for i in range(5):
-    cue(41.72 + i * 0.1, POP2, -24)
-cue(44.12, WHOOSH, -14)
+    hit(41.76 + i * 0.1, "ui_select", -27)
+hit(44.48, "whoosh_light", -12)
 for i in range(3):
-    cue(45.3 + i * 0.16, POP2, -24)
-cue(46.98, ZOOM, -13)
-# back to Ben
-cue(47.7, POP, -25)
-cue(50.0, POP, -25)
-cue(51.26, 772, -19)
-cue(51.98, 2364, -22)
-cue(52.74, SWEEP, -21)
-for at in (53.31, 54.96, 55.95, 58.48):
-    cue(at, CHECK, -12)
-cue(58.6, WHOOSH, -13)
-cue(58.85, 2669, -17)
-cue(60.2, ZOOM, -14)
-cue(63.8, POP, -25)
-cue(64.9, POP, -25)
-cue(65.58, 2364, -22)
-cue(66.72, 2537, -14, ss=6.0, t=0.62)
-cue(68.12, SWEEP, -22)
-cue(68.32, 2537, -13, ss=8.0, t=0.62)
-cue(70.0, CLICK, -13)
-cue(70.6, POPL, -19)
-cue(71.68, POP, -25)
-cue(73.54, 2364, -22)
-cue(74.48, 2634, -17)
-cue(74.94, 2900, -11)                          # end card
+    hit(45.34 + i * 0.16, "ui_select", -27)
+hit(47.1, "woosh_quick", -13)
+# back on Ben: next actions
+hit(52.84, "whoosh_short", -21)
+for at in (53.33, 54.98, 55.97, 58.5):
+    hit(at, "chime", -17)
+    hit(at, "ui_click", -22)
+hit(58.86, "whoosh_light", -12)
+hit(59.8, "riser_short", -24)
+hit(60.34, "woosh_quick", -13)
+# URL, free check, end card
+typing("seekworthy.ai", 66.72, 67.3, gdb=-22)
+hit(68.22, "whoosh_short", -22)
+typing("yourbrand.com", 68.32, 68.92)
+hit(70.03, "ui_click", -11)
+hit(70.66, "pop", -23)
+hit(74.86, "revcym_glassy", -15)
+hit(75.0, "subdrop", -11)
+hit(75.1, "shimmer_success", -16)
 
 mix = dlg + music + fx
 peak = np.abs(mix).max()
 print(f"pre-master peak {20 * np.log10(peak):.1f} dBFS")
 mix = mix / max(1.0, peak / db(-1))
-raw = mix.astype(np.float32).tobytes()
 subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(SR), "-ac", "2", "-i", "-",
-                "-c:a", "pcm_f32le", "build/mix_pre.wav"], input=raw, check=True)
-
-# two-pass loudness master to -14 LUFS / -1 dBTP
+                "-c:a", "pcm_f32le", "build/mix_pre.wav"], input=mix.astype(np.float32).tobytes(), check=True)
 meas = subprocess.run(["ffmpeg", "-v", "info", "-i", "build/mix_pre.wav", "-af",
                        "loudnorm=I=-14:TP=-1.2:LRA=9:print_format=json", "-f", "null", "-"],
                       capture_output=True, text=True).stderr
@@ -205,4 +217,7 @@ af = (f"loudnorm=I=-14:TP=-1.2:LRA=9:measured_I={js['input_i']}:measured_TP={js[
       f"measured_LRA={js['input_lra']}:measured_thresh={js['input_thresh']}:offset={js['target_offset']}:linear=true")
 subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", "build/mix_pre.wav", "-af", af, "-ar", "48000",
                 "-c:a", "pcm_s16le", "build/mix.wav"], check=True)
+# stems for checking the balance
+subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "f32le", "-ar", str(SR), "-ac", "2", "-i", "-",
+                "-c:a", "pcm_s16le", "build/stem_dialogue.wav"], input=dlg.astype(np.float32).tobytes(), check=True)
 print("mastered build/mix.wav; measured input", js["input_i"], "LUFS")

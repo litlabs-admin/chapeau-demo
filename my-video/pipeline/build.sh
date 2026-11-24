@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Rebuild both Seekworthy launch videos from raw/IMG_1133.MOV.
 # Needs: ffmpeg, python3 (numpy, opencv-python-headless, onnxruntime,
+# a python3.11 venv at work/enh with torch 2.1.1 + resemble-enhance,
 # faster-whisper, librosa), node + playwright (Chromium), and the model
 # work/models/rvm_resnet50_fp32.onnx (RobustVideoMatting v1.0.0 release).
 set -euo pipefail
@@ -21,6 +22,7 @@ step "word timings";       python3 pipeline/words.py
 step "caption data";       python3 pipeline/gfx_data.py
 [ -f build/alpha.mkv ] || { step "matte"; python3 pipeline/matte.py; }
 step "graphics frames";    node pipeline/capture.cjs --workers 4 --out build/gfx
+step "voice restoration";  pipeline/enhance_voice.sh
 step "sound mix";          python3 pipeline/audio.py
 step "composite v1 + v2"
 python3 pipeline/composite.py v1 & python3 pipeline/composite.py v2; wait

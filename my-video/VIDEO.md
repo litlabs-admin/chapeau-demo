@@ -85,13 +85,41 @@ data (Venture PR, Northlight PR, Brightwell, Cedar & Pine, Marlow Partners).
 
 ## Sound
 
-- Dialogue: high-pass, light denoise, de-mud, presence, 3:1 compression, de-ess.
-- Music: **"Minimal Emotion"** — Mixkit (track 160), Mixkit Stock Music Free License. Bar 16's lift
-  is placed on the logo reveal; a bar 36 -> 56 jump lands the outro under the call to action. Ducked
-  ~17 dB under speech, ~8.5 dB between lines.
-- SFX: Mixkit Sound Effects Free License (whooshes, UI clicks, pops, typing, ticks, impacts, ids in
-  `pipeline/audio.py`).
-- Master: -14.0 LUFS integrated, -1.2 dBTP.
+- **Dialogue** (`pipeline/enhance_voice.sh`): the phone take was muffled and boxy (energy piled up at
+  100–800 Hz, steep loss above 1.5 kHz) with room noise at −56 dBFS. Resemble Enhance in denoise-only
+  mode removes noise and room tone (floor now below −90 dBFS); corrective EQ removes the low-mid
+  build-up and restores presence and air; a gentle harmonic exciter above 3.5 kHz rebuilds the top end
+  the phone cut off. Resemble's full "enhance" mode was tested and **rejected**: it changed words
+  ("a shortlist" heard as "chocolates with"). Each candidate was checked with a speech recogniser
+  against the original transcript; the final chain adds no word changes. Then light compression,
+  de-ess, −16 LUFS.
+- **Music:** "march 2" by Ondrosik — [Free Music Archive](https://freemusicarchive.org/music/Ondrosik/burnout/march-2-1/),
+  **CC0 1.0** (no attribution required). Starts on the bar at 8.73 s so its section change lands on the
+  Seekworthy reveal; one bar-aligned jump (44.21 s -> 75.51 s, picked by chroma/MFCC similarity) lands
+  the track's own ending on the end card. Ducked ~16 dB under speech, ~7 dB between lines.
+- **SFX** (all Freesound, CC0, licence checked on each sound page), placed by each sound's loudest
+  point on its visual event; typing is one keystroke per character as it appears:
+  - whoosh_light: "Whoosh stereo light (transition)" by xkeril (freesound.org/s/701104) CC0
+  - woosh_slide: "Sliding Trailer Woosh" by qubodup (freesound.org/s/171255) CC0
+  - whoosh_short: "Whoosh" by qubodup (freesound.org/s/60013) CC0
+  - woosh_quick: "quick woosh" by florianreichelt (freesound.org/s/683101) CC0
+  - swoosh_halgrimm: "swoosh" by Halgrimm (freesound.org/s/169867) CC0
+  - riser_short: "Riser sound effect short.wav" by syntheffects (freesound.org/s/685256) CC0
+  - revcym_glassy: "cymbal-reversed-glassy-resonance.wav" by burnttoys (freesound.org/s/9523) CC0
+  - subdrop: "Sub Drop Smooth.wav" by newagesoup (freesound.org/s/428073) CC0
+  - impact_low: "Cinematic Low Pitch Impact" by Jofae (freesound.org/s/408141) CC0
+  - shimmer_success: "Ui sounds - Shimmering success" by Philip_Berger (freesound.org/s/648212) CC0
+  - shimmer_coin: "Coin Flip Shimmer" by dpren (freesound.org/s/248143) CC0
+  - ui_click: "SFX UI Button Click" by suntemple (freesound.org/s/253168) CC0
+  - ui_select: "Menu Scroll/ Selection Sound" by CS279 (freesound.org/s/200469) CC0
+  - ui_menu_click: "Menu Selection Click" by NenadSimic (freesound.org/s/171697) CC0
+  - ui_hint: "hint.wav" by dland (freesound.org/s/320181) CC0
+  - chime: "Chime Notification" by Jofae (freesound.org/s/380482) CC0
+  - notify: "Notification Sound" by yfjesse (freesound.org/s/235911) CC0
+  - pop: "Pop sound" by deraj (freesound.org/s/202230) CC0
+  - keys_single: "Single clicks Keyboard Sound" by StrikeWhistler (freesound.org/s/580786) CC0
+  - mouse_click: "computer mouse click" by florianreichelt (freesound.org/s/683099) CC0
+- **Master:** −14.0 LUFS integrated, −1.2 dBTP.
 
 ## Assumptions / open items
 
