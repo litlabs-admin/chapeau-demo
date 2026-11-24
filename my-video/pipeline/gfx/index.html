@@ -1,0 +1,73 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Seekworthy launch graphics</title>
+<style>
+@font-face { font-family: "Geist"; src: url("../../assets/fonts/Geist-variable-latin.woff2") format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "Inter"; src: url("../../assets/fonts/Inter-roman-100-900-latin.woff2") format("woff2"); font-weight: 100 900; }
+@font-face { font-family: "Barlow Condensed"; src: url("../../assets/fonts/BarlowCondensed-600.woff2") format("woff2"); font-weight: 600; }
+@font-face { font-family: "Barlow Condensed"; src: url("../../assets/fonts/BarlowCondensed-700.woff2") format("woff2"); font-weight: 700; }
+
+/* Seekworthy tokens, copied from seekworthy.ai's stylesheet */
+:root {
+  --navy: #0f1b4c;
+  --navy-deep: #0a1338;
+  --lime: #b8ff3c;
+  --lime-tint: #f6ffe0;
+  --blue: #3f5efb;
+  --blue-bright: #647cf4;
+  --blue-deep: #2743c9;
+  --accent-line: #c9d2ff;
+  --surface: #f3f5fa;
+  --ink: #0f1b4c;
+  --body: #2b3560;
+  --muted: #5b6386;
+  --faint: #9aa2c0;
+  --line: #dcdfe8;
+  --line-soft: #e9ecf3;
+  --danger: #c81f37;
+  --c-n: #d6608a; --c-v: #3f5efb; --c-b: #2aa5b0; --c-c: #e0913a; --c-m: #8b5cf6;
+  --shadow-float: 0 2px 4px -2px #1016371a, 0 16px 36px -12px #10163733, 0 40px 80px -36px #10163747;
+  --shadow-shell: 0 2px 4px -2px #10163714, 0 8px 20px -6px #10163712, 0 36px 72px -24px #10163733, 0 96px 176px -80px #10163755, 0 48px 112px -56px #3b5bf633;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
+body { font-family: "Geist", Inter, sans-serif; color: #fff; -webkit-font-smoothing: antialiased; }
+.layer { position: absolute; inset: 0; overflow: hidden; }
+body[data-layer="back"] #front { display: none; }
+body[data-layer="front"] #back { display: none; }
+.abs { position: absolute; }
+.hidden { display: none !important; }
+
+/* type */
+.h-xl { font-weight: 700; letter-spacing: -0.035em; line-height: 0.98; }
+.eyebrow { font-family: "Barlow Condensed"; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; font-size: 28px; color: var(--muted); }
+.num { font-family: "Barlow Condensed"; font-weight: 700; letter-spacing: -0.01em; }
+.word { display: inline-block; white-space: pre; will-change: transform, opacity, filter; }
+.hl { position: relative; display: inline-block; }
+.hl > .hl-bg { position: absolute; left: -0.08em; right: -0.08em; top: 0.06em; bottom: 0.02em; background: var(--lime); border-radius: 0.08em; transform-origin: left center; z-index: 0; }
+.hl > .hl-tx { position: relative; z-index: 1; }
+
+/* cards */
+.card { background: #fff; border: 1px solid #e6e6ef; border-radius: 24px; box-shadow: var(--shadow-shell); color: var(--ink); }
+.pill { display: inline-flex; align-items: center; gap: 14px; background: #fff; color: var(--ink); border-radius: 999px; box-shadow: var(--shadow-float); }
+.chip-lime { display: inline-flex; align-items: center; gap: 8px; background: var(--lime); color: var(--navy); font-family: "Barlow Condensed"; font-weight: 700; border-radius: 8px; padding: 4px 14px; }
+.fav { display: inline-flex; align-items: center; justify-content: center; color: #fff; font-family: "Barlow Condensed"; font-weight: 700; border-radius: 10px; }
+.engine { width: 44px; height: 44px; }
+.screen { position: absolute; inset: 0; overflow: hidden; }
+.grid-bg { background-image: linear-gradient(#0f1b4c0a 1px, transparent 1px), linear-gradient(90deg, #0f1b4c0a 1px, transparent 1px); background-size: 64px 64px; }
+.grid-bg-dark { background-image: linear-gradient(#ffffff0d 1px, transparent 1px), linear-gradient(90deg, #ffffff0d 1px, transparent 1px); background-size: 64px 64px; }
+
+/* captions */
+#captions { position: absolute; left: 0; right: 0; bottom: 64px; display: flex; justify-content: center; }
+#cap { font-weight: 500; font-size: 42px; letter-spacing: -0.01em; color: #fff; background: rgba(10, 19, 56, 0.78); padding: 12px 28px 14px; border-radius: 16px; white-space: nowrap; box-shadow: 0 10px 40px -10px #0a133880; }
+</style>
+</head>
+<body data-layer="front">
+<div id="back" class="layer"></div>
+<div id="front" class="layer"></div>
+<script src="data.js"></script>
+<script src="timeline.js"></script>
+</body>
+</html>

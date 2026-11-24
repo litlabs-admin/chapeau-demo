@@ -4,3 +4,6 @@ node_modules/
 !.agents/skills/
 exports/
 .DS_Store
+raw/
+work/
+build/
