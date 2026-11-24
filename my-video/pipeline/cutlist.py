@@ -23,44 +23,47 @@ TRANSCRIPT = "work/transcript.json"
 # graphic moment (source room tone, no added silence).
 SELECTS = [
     (42.32, 47.54, 0.00, "hook: next customer could ask AI"),
-    (62.94, 67.64, 0.10, "they ask ChatGPT which company"),
+    (62.94, 67.64, 0.00, "they ask ChatGPT which company"),
     (71.86, 73.46, 0.00, "your competitor's on it"),
-    (73.72, 74.04, 0.25, "you're not"),
-    (74.58, 75.00, 0.45, "would you know?"),
+    (73.72, 74.04, 0.15, "you're not"),
+    (74.58, 75.00, 0.25, "would you know?"),
     (78.92, 81.32, 0.05, "I'm Ben, founder of Seekworthy"),
-    (87.62, 91.38, 0.20, "we help businesses see"),
+    (87.62, 91.38, 0.05, "we help businesses see"),
     (118.22, 121.12, 0.00, "but when a buyer asks AI for advice"),
-    (121.92, 124.26, 0.30, "you need to know if you show up"),
-    (132.86, 134.30, 0.35, "that's why we built Seekworthy"),
-    ("GAP", 1.20, "logo reveal"),
-    (134.42, 139.06, 0.15, "it helps you understand"),
-    ("GAP", 0.70, "dashboard hold"),
-    (150.38, 154.62, 0.15, "you start with your website"),
-    ("GAP", 0.60, "prompt list hold"),
-    (176.28, 182.30, 0.10, "Seekworthy checks those questions"),
-    ("GAP", 0.50, "mention highlight hold"),
-    (240.03, 245.34, 0.20, "competitors appear / sources cite"),
-    ("GAP", 0.80, "citations hold"),
+    (121.92, 124.26, 0.10, "you need to know if you show up"),
+    (132.86, 134.30, 0.10, "that's why we built Seekworthy"),
+    ("GAP", 1.00, "logo reveal"),
+    (134.42, 139.06, 0.05, "it helps you understand"),
+    ("GAP", 0.30, "dashboard hold"),
+    (150.38, 154.62, 0.05, "you start with your website"),
+    ("GAP", 0.30, "prompt list hold"),
+    (176.28, 182.30, 0.05, "Seekworthy checks those questions"),
+    ("GAP", 0.25, "mention highlight hold"),
+    (240.03, 245.34, 0.05, "competitors appear / sources cite"),
+    ("GAP", 0.40, "citations hold"),
     (266.08, 269.76, 0.10, "go beyond checking your name once"),
-    (271.12, 272.90, 0.30, "check and fix the gaps"),
+    (271.12, 272.90, 0.10, "check and fix the gaps"),
     (284.00, 285.69, 0.05, "correct an inaccurate description"),
     (286.24, 286.90, 0.10, "improve a page"),
     (291.18, 293.96, 0.10, "create content"),
-    (296.72, 298.78, 0.35, "check again"),
-    ("GAP", 0.60, "trend up hold"),
-    (304.06, 307.18, 0.20, "no one can promise"),
-    (313.70, 317.00, 0.35, "stop guessing, evidence"),
+    (296.72, 298.78, 0.15, "check again"),
+    ("GAP", 0.30, "trend up hold"),
+    (304.06, 307.18, 0.10, "no one can promise"),
+    (313.70, 317.00, 0.15, "stop guessing, evidence"),
     (339.26, 341.06, 0.10, "go to seekworthy.ai"),
     (341.60, 343.84, 0.05, "enter your website, free check"),
-    (344.30, 344.96, 0.25, "no card needed"),
-    (347.68, 350.80, 0.60, "find out whether AI is recommending"),
-    ("GAP", 2.40, "end card"),
+    (344.30, 344.96, 0.15, "no card needed"),
+    (347.68, 350.80, 0.30, "find out whether AI is recommending"),
+    ("GAP", 3.00, "end card"),
 ]
 
 # Room-tone stretch (Ben silent) used under full-screen graphic beats.
 GAP_SRC = 26.0
-IN_PAD = 0.05
-OUT_PAD = 0.08
+IN_PAD = 0.04
+OUT_PAD = 0.07
+# Pauses inside a line longer than this are tightened to KEEP_PAUSE.
+MAX_PAUSE = 0.30
+KEEP_PAUSE = 0.18
 
 
 def load_env():
@@ -137,17 +140,33 @@ def main():
         if after:
             nxt = onset(after[0]["s"], after[0]["e"])
             b = min(b, nxt - 0.04)
-        fa, fb = round(a * FPS), round(b * FPS)
-        n = fb - fa
-        segs.append(dict(label=label, src_in=fa / FPS, src_out=fb / FPS, src_f0=fa, src_f1=fb,
-                         frames=n, edit_f0=edit_f, edit_f1=edit_f + n))
-        for w in allw:
-            if src_in - 0.01 <= w["s"] <= src_out + 0.01:
-                s = max(w["s"], fa / FPS)
-                e = min(w["e"], fb / FPS)
-                out_words.append(dict(w=w["w"].strip(), s=round(edit_f / FPS + s - fa / FPS, 3),
-                                      e=round(edit_f / FPS + e - fa / FPS, 3), seg=len(segs) - 1))
-        edit_f += n
+        # split at long pauses inside the line, keeping KEEP_PAUSE of each
+        pieces, cur, run, st = [], a, 0, None
+        for i in range(int(a * 100) + 10, int(b * 100) - 10):
+            if not loud[i]:
+                if run == 0:
+                    st = i
+                run += 1
+            else:
+                if run / 100 >= MAX_PAUSE:
+                    half = KEEP_PAUSE / 2
+                    pieces.append((cur, st / 100 + half))
+                    cur = i / 100 - half
+                run = 0
+        pieces.append((cur, b))
+        for pi, (pa, pb) in enumerate(pieces):
+            fa, fb = round(pa * FPS), round(pb * FPS)
+            n = fb - fa
+            segs.append(dict(label=label + (f" [{pi + 1}/{len(pieces)}]" if len(pieces) > 1 else ""),
+                             src_in=fa / FPS, src_out=fb / FPS, src_f0=fa, src_f1=fb,
+                             frames=n, edit_f0=edit_f, edit_f1=edit_f + n, line=label))
+            for w in allw:
+                if src_in - 0.01 <= w["s"] <= src_out + 0.01 and fa / FPS - 0.05 <= w["s"] < fb / FPS:
+                    ws = max(w["s"], fa / FPS)
+                    we = min(w["e"], fb / FPS)
+                    out_words.append(dict(w=w["w"].strip(), s=round(edit_f / FPS + ws - fa / FPS, 3),
+                                          e=round(edit_f / FPS + we - fa / FPS, 3), seg=len(segs) - 1))
+            edit_f += n
 
     # Transcript spelling fixes (Whisper hears the brand as "Seakworthy").
     for w in out_words:

@@ -1,16 +1,20 @@
-/* Seekworthy launch: motion-graphics timeline, in the reference's language.
+/* Seekworthy launch: motion timeline, rebuilt on the reference film's language
+ * (Arist launch, studied frame by frame):
+ *  - small regular-weight type, word by word as he speaks, in a corner, one
+ *    key word in the brand colour;
+ *  - chained match-cut transitions: tile mosaic -> white canvas -> tiles
+ *    assemble -> collapse to one square -> the square becomes a thumbnail
+ *    of the speaker -> expands to full frame; footage shrinks into cards
+ *    among UI; split screens whose UI list updates as he talks;
+ *  - frosted-glass panels over (blurred) footage, white UI cards on flat
+ *    brand-colour or soft gradient canvases, a dot-grid app-icon moment,
+ *    and a gradient "Is yours?" ending into the logo.
+ * Seekworthy colours replace Arist's: flat blue for the red, blue/cyan/white
+ * gradients, lime as the accent on footage.
  *
- * Reference (ObiN Studio's Arist launch + their reels): light/regular
- * grotesk set big and quiet, an italic serif for the one word that matters,
- * words that blur into focus one at a time, a huge word behind the speaker
- * with a two-line name over his body, soft two-colour light blooming from
- * the bottom corners, deep near-black spaces with glow and thin frame lines,
- * light UI cards floating in 3D, a hand cursor, small captions.
- * Only Seekworthy's colours and logo are used.
- *
- * Every frame is a pure function of the frame number (window.renderFrame).
- * #back renders behind Ben (the compositor lays his matte over it), #front
- * over him. Times are seconds on the edit timeline, 30 fps.
+ * Exports per frame: window.renderFrame(f) (DOM for layers back/front/glass),
+ * window.plate(f) (where the footage sits: zoom, card rect, blur) and
+ * window.SFX (sound cues placed on the same events).
  */
 (() => {
   const FPS = 30, W = 1920, H = 1080;
@@ -22,12 +26,11 @@
     inCubic: (x) => x * x * x,
     inOutCubic: (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2),
     outExpo: (x) => (x >= 1 ? 1 : 1 - Math.pow(2, -10 * x)),
-    inExpo: (x) => (x <= 0 ? 0 : Math.pow(2, 10 * x - 10)),
     outQuint: (x) => 1 - Math.pow(1 - x, 5),
     inOutQuint: (x) => (x < 0.5 ? 16 * Math.pow(x, 5) : 1 - Math.pow(-2 * x + 2, 5) / 2),
-    outBack: (x) => { const c1 = 1.4, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); },
+    outBack: (x) => { const c1 = 1.3, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); },
   };
-  const tw = (t, t0, t1, e = E.outCubic) => e(clamp((t - t0) / (t1 - t0)));
+  const tw = (t, t0, t1, e = E.outCubic) => e(clamp((t - t0) / Math.max(1e-6, t1 - t0)));
   const $ = (tag, cls, parent, html) => {
     const el = document.createElement(tag);
     if (cls) el.className = cls;
@@ -36,68 +39,62 @@
     return el;
   };
   const css = (el, o) => { for (const k in o) el.style[k] = o[k]; return el; };
+  const blur = (el, b) => { el.style.filter = b > 0.05 ? `blur(${b.toFixed(2)}px)` : "none"; };
   const BACK = document.getElementById("back");
   const FRONT = document.getElementById("front");
   const A = "../../assets/";
   const icon = (k, s) => `<img src="${A}engines/${k}.svg" style="width:${s}px;height:${s}px;display:block">`;
   const MARK = `${A}brand/mark.png`;
   const ENG = [["chatgpt", "ChatGPT"], ["claude", "Claude"], ["perplexity", "Perplexity"], ["gemini", "Gemini"], ["grok", "Grok"], ["deepseek", "DeepSeek"]];
-  const fav = (l, c, s) => `<span class="fav" style="width:${s}px;height:${s}px;background:${c};font-size:${Math.round(s * 0.46)}px">${l}</span>`;
+  const fav = (l, c, s, r = 12) => `<span class="fav" style="width:${s}px;height:${s}px;background:${c};font-size:${Math.round(s * 0.46)}px;border-radius:${r}px">${l}</span>`;
   const typed = (txt, t, t0, t1) => txt.slice(0, Math.round(clamp((t - t0) / (t1 - t0)) * txt.length));
   const caretOn = (t) => Math.floor(t * 2.2) % 2 === 0;
-  const count = (t, t0, t1, v) => Math.round(lerp(0, v, tw(t, t0, t1, E.outQuint)));
-  const blur = (el, b) => { el.style.filter = b > 0.05 ? `blur(${b.toFixed(2)}px)` : "none"; };
+  const count = (t, t0, t1, v0, v1) => Math.round(lerp(v0, v1, tw(t, t0, t1, E.outQuint)));
+  function rng(seed) { return () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let x = Math.imul(seed ^ (seed >>> 15), 1 | seed); x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x; return ((x ^ (x >>> 14)) >>> 0) / 4294967296; }; }
 
-  /** Focus-pull entrance (the reference's signature): blur -> sharp, slight rise. */
-  function focus(el, t, tin, tout, o = {}) {
-    const din = o.din ?? 0.55, dout = o.dout ?? 0.32;
-    const p = tw(t, tin, tin + din, E.outExpo);
-    const q = tout == null ? 0 : tw(t, tout - dout, tout, E.inCubic);
-    el.style.opacity = (p * (1 - q)).toFixed(4);
-    const s = lerp(o.scale ?? 1.0, 1, p) * lerp(1, o.outScale ?? 1.02, q);
-    el.style.transform = `translate(${(o.dx ?? 0) * (1 - p)}px, ${(o.dy ?? 26) * (1 - p) - (o.dyOut ?? 0) * q}px) scale(${s})`;
-    blur(el, (o.blur ?? 18) * (1 - p) + (o.blurOut ?? 14) * q);
-    return p * (1 - q);
+  // ---------------------------------------------------------------- the spoken words drive every cue
+  const WORDS = window.WORDS;
+  const norm = (s) => s.toLowerCase().replace(/[^a-z0-9']/g, "");
+  function find(phrase, after = 0) {
+    const toks = phrase.split(" ").map(norm);
+    for (let i = 0; i < WORDS.length; i++) {
+      if (WORDS[i].s < after - 0.01) continue;
+      let ok = true;
+      for (let j = 0; j < toks.length; j++) if (!WORDS[i + j] || norm(WORDS[i + j].w) !== toks[j]) { ok = false; break; }
+      if (ok) return i;
+    }
+    throw new Error("phrase not found: " + phrase + " after " + after);
   }
+  const P = (ph, after) => WORDS[find(ph, after)].s;
+  const PE = (ph, after) => { const i = find(ph, after); return WORDS[i + ph.split(" ").length - 1].e; };
+  const SEG = (prefix) => { const s = window.SEGS.filter((x) => x.label.startsWith(prefix)); if (!s.length) throw new Error("seg " + prefix); return { t0: s[0].t0, t1: s[s.length - 1].t1 }; };
+  const END = window.TOTAL_FRAMES / FPS;
 
-  /** Kinetic title: lines of [text, at, style] words; style: "", "serif", "grad", "serif grad", "mist". */
-  function kinetic(parent, lines, o) {
-    const box = $("div", "abs", parent);
-    css(box, { left: `${o.x}px`, top: `${o.y}px`, fontSize: `${o.size}px`, fontWeight: o.weight ?? 300,
-      letterSpacing: o.ls ?? "-0.045em", lineHeight: o.lh ?? "0.98", color: "#fff", textAlign: o.align || "left",
-      width: o.w ? `${o.w}px` : "auto",
-      textShadow: o.shadow === false ? "none" : "0 0 80px rgba(5,10,34,0.35)" });
-    const words = [];
-    lines.forEach((line) => {
-      const ln = $("div", "", box);
-      css(ln, { whiteSpace: "nowrap" });
-      line.forEach(([txt, at, st = ""], i) => {
-        const w = $("span", "word " + st, ln, txt);
-        if (st.includes("serif")) { w.style.fontSize = "1.12em"; w.style.lineHeight = "0.9"; }
-        if (st.includes("mist")) w.style.color = "var(--mist)";
-        if (st.includes("lime")) w.style.color = "var(--lime)";
-        if (st.includes("grad")) w.style.textShadow = "none";
-        words.push({ el: w, at });
-        if (i < line.length - 1) $("span", "word", ln, " ");
-      });
-    });
-    return {
-      box,
-      update(t, tout, dissolveAt) {
-        for (const w of words) {
-          const p = tw(t, w.at - 0.04, w.at + 0.6, E.outExpo);
-          w.el.style.opacity = p.toFixed(4);
-          w.el.style.transform = `translateY(${(1 - p) * 0.18 * o.size}px)`;
-          blur(w.el, 22 * (1 - p));
-        }
-        const q = tout == null ? 0 : tw(t, tout - 0.34, tout, E.inCubic);
-        box.style.opacity = (1 - q).toFixed(4);
-        blur(box, 16 * q);
-        box.style.transform = `scale(${lerp(1, 1.03, q)})`;
-      },
-    };
-  }
+  // ---------------------------------------------------------------- sound cues (exported for the mix)
+  const SFX = [];
+  const sfx = (t, name, g = 0, extra = {}) => SFX.push(Object.assign({ t: +t.toFixed(3), name, g }, extra));
+  window.SFX = SFX;
 
+  // ---------------------------------------------------------------- plate track: where the footage is
+  const FULL = { z: 1, ax: 0.5, ay: 0.38, x: 0, y: 0, w: W, h: H, r: 0, blur: 0, dim: 0, show: 1, op: 1 };
+  const PK = [];
+  const key = (t, st, e = "inOutCubic") => PK.push({ t, st: Object.assign({}, FULL, st), e });
+  let sorted = false;
+  window.plate = (f) => {
+    if (!sorted) { PK.sort((a, b) => a.t - b.t); sorted = true; }
+    const t = f / FPS;
+    let i = 0;
+    while (i + 1 < PK.length && PK[i + 1].t <= t) i++;
+    const k0 = PK[i], k1 = PK[i + 1];
+    if (!k1 || t < k0.t || k1.e === "step") return k0.st;
+    const p = E[k1.e](clamp((t - k0.t) / (k1.t - k0.t)));
+    const o = {};
+    for (const n in FULL) o[n] = lerp(k0.st[n], k1.st[n], p);
+    o.show = k0.st.show;
+    return o;
+  };
+
+  // ---------------------------------------------------------------- beats
   const beats = [];
   const beat = (layer, t0, t1, build) => {
     const root = $("div", "abs", layer === "back" ? BACK : FRONT);
@@ -105,673 +102,754 @@
     beats.push({ t0, t1, root, update: build(root) });
   };
 
-  /** Full-frame dark space with glow and thin frame lines; enters/leaves as a focus dissolve or a light bloom. */
-  function space(parent, o = {}) {
-    const p = $("div", "screen night", parent);
-    const fr = $("div", "frames", p);
-    (o.frames || [[240, "v"], [1680, "v"], [150, "h"], [930, "h"]]).forEach(([pos, d]) => {
-      const i = $("i", "", fr);
-      if (d === "v") css(i, { left: `${pos}px`, top: 0, width: "1.5px", height: `${H}px` });
-      else css(i, { top: `${pos}px`, left: 0, height: "1.5px", width: `${W}px` });
+  /** Word-by-word type, the reference's signature: each word appears as it is spoken.
+   *  lines: strings, *word* = accent. o: {x,y,align,size,after,out,dark,w} */
+  function say(r, lines, o) {
+    const box = $("div", "abs", r);
+    css(box, { top: `${o.y}px`, fontSize: `${o.size || 66}px`, fontWeight: 400, letterSpacing: "-0.022em", lineHeight: "1.1",
+      color: o.dark ? "var(--ink)" : "#fff", textShadow: o.dark ? "none" : "0 2px 28px rgba(0,0,0,.35)", textAlign: o.align || "left" });
+    if (o.align === "right") box.style.right = `${W - o.x}px`;
+    else if (o.align === "center") { box.style.left = "0px"; box.style.width = `${W}px`; }
+    else box.style.left = `${o.x}px`;
+    let cursor = o.after ?? 0;
+    const ws = [];
+    for (const line of lines) {
+      const ln = $("div", "", box);
+      css(ln, { whiteSpace: "nowrap" });
+      line.split(" ").forEach((raw, j, arr) => {
+        const acc = raw.startsWith("*") || raw.endsWith("*");
+        const txt = raw.replace(/\*/g, "");
+        const i = find(txt, cursor);
+        cursor = WORDS[i].s;
+        const w = $("span", "w", ln, txt + (j < arr.length - 1 ? " " : ""));
+        if (acc) w.style.color = o.accent || (o.dark ? "var(--blue)" : "var(--lime)");
+        ws.push({ el: w, at: WORDS[i].s });
+      });
+    }
+    return {
+      box,
+      update(t) {
+        for (const w of ws) {
+          const p = tw(t, w.at - 0.04, w.at + 0.3, E.outCubic);
+          w.el.style.opacity = p.toFixed(3);
+          w.el.style.transform = `translateY(${(1 - p) * 12}px)`;
+          blur(w.el, 7 * (1 - p));
+        }
+        const q = o.out == null ? 0 : tw(t, o.out - 0.24, o.out, E.inCubic);
+        box.style.opacity = (1 - q).toFixed(3);
+        blur(box, 10 * q);
+      },
+    };
+  }
+  /** Focus entrance/exit for UI pieces. */
+  function show(el, t, tin, tout, o = {}) {
+    const din = o.din ?? 0.4, dout = o.dout ?? 0.25;
+    const p = tw(t, tin, tin + din, o.e || E.outExpo);
+    const q = tout == null ? 0 : tw(t, tout - dout, tout, E.inCubic);
+    el.style.opacity = (p * (1 - q)).toFixed(3);
+    el.style.transform = `translate(${(o.dx ?? 0) * (1 - p)}px, ${(o.dy ?? 24) * (1 - p) - (o.dyOut ?? 0) * q}px) scale(${lerp(o.scale ?? 1, 1, p) * lerp(1, o.outScale ?? 1, q)})`;
+    blur(el, (o.blur ?? 10) * (1 - p) + (o.blurOut ?? 8) * q);
+    return p * (1 - q);
+  }
+  /** Full-frame canvas. kind: white | blue | grad */
+  function canvas(r, kind) {
+    const c = $("div", "abs", r);
+    css(c, { left: 0, top: 0, width: `${W}px`, height: `${H}px` });
+    if (kind === "white") c.style.background = "#ffffff";
+    if (kind === "blue") c.style.background = "radial-gradient(1400px 900px at 70% 20%, #5873ff 0%, #3f5efb 45%, #3453f2 100%)";
+    if (kind === "grad") {
+      c.style.background = "radial-gradient(1100px 800px at 0% 100%, rgba(63,94,251,.95), rgba(63,94,251,0) 70%), radial-gradient(1000px 760px at 100% 0%, rgba(95,208,255,.9), rgba(95,208,255,0) 70%), radial-gradient(900px 600px at 100% 100%, rgba(63,94,251,.55), rgba(63,94,251,0) 70%), #f4f7ff";
+      c.classList.add("ribs");
+    }
+    return c;
+  }
+  /** Big white input field in a frosted container (the reference's prompt UI). */
+  function inputPill(r, x, y, w) {
+    const wrap = $("div", "abs gl glass", r);
+    css(wrap, { left: `${x}px`, top: `${y}px`, width: `${w}px`, padding: "12px", borderRadius: "28px" });
+    const field = $("div", "", wrap);
+    css(field, { background: "#fff", borderRadius: "18px", height: "84px", display: "flex", alignItems: "center", gap: "18px", padding: "0 14px 0 26px", boxShadow: "0 6px 18px -8px rgba(15,27,76,.25)" });
+    field.innerHTML = `<span style="font-size:34px;color:var(--faint);font-weight:300">+</span><span class="tx" style="flex:1;font-size:34px;color:var(--ink);letter-spacing:-0.01em;white-space:nowrap;overflow:hidden"></span>
+      <span class="go" style="width:58px;height:58px;border-radius:14px;background:var(--blue);display:flex;align-items:center;justify-content:center">
+      <svg width="28" height="28" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+    const tx = field.querySelector(".tx"), go = field.querySelector(".go");
+    return {
+      wrap,
+      update(t, text, t0, t1, tap, placeholder = "") {
+        const s = t >= t0 ? typed(text, t, t0, t1) : "";
+        tx.innerHTML = s ? s + (t < (tap ?? t1 + 0.6) && caretOn(t) ? '<span style="color:var(--blue);font-weight:300">|</span>' : "") : `<span style="color:var(--faint)">${placeholder}</span>`;
+        const k = tap == null ? 0 : Math.sin(Math.PI * clamp((t - tap) / 0.22));
+        go.style.transform = `scale(${1 - 0.12 * k})`;
+        go.style.background = tap != null && t > tap && t < tap + 0.4 ? "var(--blue-deep)" : "var(--blue)";
+      },
+    };
+  }
+  /** Soft brand bloom over the footage (the reference's colour wash). */
+  function aura(r, t0, t1, side = "left", strength = 0.75) {
+    const g = $("div", "abs", r);
+    const L = side === "left";
+    css(g, { left: L ? "-600px" : "900px", top: "300px", width: "1700px", height: "1200px", borderRadius: "50%",
+      background: `radial-gradient(closest-side, rgba(${L ? "63,94,251" : "95,208,255"},${strength}), rgba(${L ? "95,208,255" : "63,94,251"},${strength * 0.35}) 55%, rgba(63,94,251,0) 100%)` });
+    return (t) => {
+      const v = tw(t, t0, t0 + 0.7, E.outCubic) * (1 - tw(t, t1 - 0.4, t1, E.inCubic));
+      g.style.opacity = v.toFixed(3);
+      g.style.transform = `translate(${(L ? 1 : -1) * (Math.sin(t * 0.5) * 50 - (1 - v) * 120)}px, ${(1 - v) * 120}px)`;
+    };
+  }
+
+  // ================================================================ SCENES
+  const tHookEnd = SEG("they ask").t0;
+  const tLine3 = SEG("your competitor").t0;
+  const tWould = P("Would");
+  const tBen = SEG("I'm Ben").t0;
+  const tThumb = PE("Would you know?") + 0.05;
+  const tExpand = tBen + 0.04;
+  key(0, {});
+
+  // ---------------- 1. Hook: type + prompt + mosaic behind him
+  beat("front", 0, tHookEnd + 0.05, (r) => {
+    const a = say(r, ["Your next customer", "could ask *AI*"], { x: 1810, y: 770, align: "right", out: P("for") - 0.05 });
+    const b = say(r, ["for a recommendation"], { x: 1810, y: 840, align: "right", after: P("for"), out: P("never") - 0.05 });
+    const c = say(r, ["never hear", "your *name.*"], { x: 1810, y: 770, align: "right", after: P("never") - 0.05, out: tHookEnd + 0.02 });
+    const inp = inputPill(r, 1130, 70, 700);
+    const PROMPT = "Best sales platform for a B2B startup?";
+    const t0 = P("ask") + 0.1;
+    sfx(P("ask") - 0.05, "whoosh_short", -20);
+    sfx(t0 + 0.05, "type", -21, { text: PROMPT, dur: 1.2 });
+    sfx(t0 + 1.35, "ui_click", -12);
+    return (t) => {
+      a.update(t); b.update(t); c.update(t);
+      show(inp.wrap, t, P("ask") - 0.08, P("never") + 0.25, { dy: -20, scale: 0.96, din: 0.45 });
+      inp.update(t, PROMPT, t0, t0 + 1.2, t0 + 1.35, "Ask anything");
+    };
+  });
+  // mosaic of brand tiles fading in behind Ben, with icon tiles popping
+  const TS = 118, TG = 12, COLS = 15, ROWS = 8;
+  const TOX = (W - (COLS * (TS + TG) - TG)) / 2, TOY = (H - (ROWS * (TS + TG) - TG)) / 2;
+  const R = rng(42);
+  const TILES = [];
+  for (let rr = 0; rr < ROWS; rr++) for (let cc = 0; cc < COLS; cc++) {
+    TILES.push({ x: TOX + cc * (TS + TG), y: TOY + rr * (TS + TG), a: [0, 0.16, 0.28, 0.42, 0.55][Math.floor(R() * 5)], d: R() });
+  }
+  const ICON_TILES = [3, 17, 26, 40, 52, 66, 73, 87, 98, 110].map((i, n) => ({ i, k: ENG[n % 6][0], n }));
+  const LETTERS = [["R", "#d6608a"], ["L", "#2aa5b0"], ["P", "#e0913a"], ["S", "#8b5cf6"]];
+  const tileFace = (ic, s) => (ic.n % 3 === 2 ? fav(LETTERS[ic.n % 4][0], LETTERS[ic.n % 4][1], Math.round(s * 0.62), 14) : icon(ic.k, Math.round(s * 0.52)));
+  const tMosaic = P("never") - 0.15;
+  beat("back", tMosaic - 0.05, tHookEnd + 0.05, (r) => {
+    const els = TILES.map((tl) => {
+      const e = $("div", "abs", r);
+      css(e, { left: `${tl.x}px`, top: `${tl.y}px`, width: `${TS}px`, height: `${TS}px`, borderRadius: "10px", background: "#3f5efb" });
+      return e;
     });
-    const world = $("div", "abs", p);
-    css(world, { left: 0, top: 0, width: `${W}px`, height: `${H}px`, perspective: "2200px", perspectiveOrigin: "50% 40%" });
-    const stage = $("div", "abs", world);
-    css(stage, { left: 0, top: 0, width: `${W}px`, height: `${H}px`, transformStyle: "preserve-3d" });
-    return {
-      el: p, stage, fr,
-      update(t, tin, tout, k = {}) {
-        let op = 1, bl = 0, sc = 1;
-        const a = tw(t, tin, tin + (k.din ?? 0.5), E.outQuint);
-        const q = tout == null ? 0 : tw(t, tout - (k.dout ?? 0.35), tout, E.inCubic);
-        if (k.from) {
-          const r = k.from, e = tw(t, tin, tin + 0.55, E.outExpo);
-          p.style.clipPath = `inset(${lerp(r.y, 0, e)}px ${lerp(W - r.x - r.w, 0, e)}px ${lerp(H - r.y - r.h, 0, e)}px ${lerp(r.x, 0, e)}px round ${lerp(r.r ?? 30, 0, e)}px)`;
-        } else {
-          op = a;
-          bl = 24 * (1 - a);
-          sc = lerp(1.06, 1, a);
-          p.style.clipPath = "none";
-        }
-        op *= 1 - q;
-        bl += 22 * q;
-        sc *= lerp(1, 1.05, q);
-        p.style.opacity = op.toFixed(4);
-        world.style.transform = `scale(${sc})`;
-        blur(world, bl);
-        fr.style.transform = `translateX(${Math.sin(t * 0.3) * 8}px)`;
-      },
-    };
-  }
-
-  /** Hand cursor (the reels use a pointing hand) that glides and taps. */
-  function hand(parent) {
-    const c = $("div", "abs", parent, `<svg width="64" height="72" viewBox="0 0 32 36">
-      <path d="M11 3.5c1.4 0 2.5 1.1 2.5 2.5v9.2l1-.2V12c0-1.3 1.1-2.4 2.4-2.4s2.4 1.1 2.4 2.4v3l.9-.1v-1.6c0-1.3 1.1-2.3 2.3-2.3s2.3 1 2.3 2.3v2.4l.6-.1c1.3 0 2.3 1 2.3 2.3v6.6c0 5-3.6 9-8.6 9h-2.3c-2.6 0-5-1.2-6.6-3.3l-5.7-7.5c-.8-1.1-.6-2.6.5-3.4 1-.7 2.4-.6 3.2.3l1.3 1.4V6c0-1.4 1.1-2.5 2.5-2.5z"
-        fill="#fff" stroke="#0f1b4c" stroke-width="1.6" stroke-linejoin="round"/></svg>`);
-    css(c, { left: 0, top: 0, filter: "drop-shadow(0 10px 14px rgba(5,10,34,.4))", transformOrigin: "30% 10%" });
-    return {
-      el: c,
-      update(t, path, tapAt, tout) {
-        let x = path[0][1], y = path[0][2];
-        for (let i = 1; i < path.length; i++) {
-          const [t1, x1, y1] = path[i], [t0, x0, y0] = path[i - 1];
-          if (t >= t0) { const k = tw(t, t0, t1, E.inOutCubic); x = lerp(x0, x1, k); y = lerp(y0, y1, k); }
-        }
-        const tap = tapAt != null ? 1 - 0.14 * Math.sin(Math.PI * clamp((t - tapAt) / 0.18)) : 1;
-        c.style.transform = `translate(${x}px, ${y}px) scale(${tap})`;
-        let o = tw(t, path[0][0] - 0.2, path[0][0]);
-        if (tout != null) o *= 1 - tw(t, tout - 0.25, tout);
-        c.style.opacity = o.toFixed(3);
-      },
-    };
-  }
-
-  // ------------------------------------------------------------ aura
-  // Two-colour light blooming from the bottom corners over the picture,
-  // exactly where the reference puts it; it swells with every title moment.
-  const TITLE_MOMENTS = [[0, 5.15], [11.43, 12.55], [12.55, 15.3], [15.0, 18.7], [18.7, 23.9], [24.2, 25.9], [47.17, 52.75], [63.2, 66.45], [66.43, 71.6], [71.6, 75.0]];
-  const auraLevel = (t) => {
-    let v = 0.18;
-    for (const [a, b] of TITLE_MOMENTS) v = Math.max(v, tw(t, a - 0.1, a + 0.7, E.outCubic) * (1 - tw(t, b - 0.3, b + 0.2, E.inOutCubic)));
-    return v;
-  };
-  beat("front", 0, 99, (r) => {
-    const L = $("div", "abs", r), R = $("div", "abs", r), Lm = $("div", "abs", r);
-    css(L, { left: "-700px", top: "560px", width: "1500px", height: "1000px", borderRadius: "50%",
-      background: "radial-gradient(closest-side, rgba(0,186,255,0.70), rgba(0,186,255,0.30) 50%, rgba(0,186,255,0) 100%)" });
-    css(R, { left: "1000px", top: "470px", width: "1600px", height: "1100px", borderRadius: "50%",
-      background: "radial-gradient(closest-side, rgba(0,42,254,0.78), rgba(63,94,251,0.40) 50%, rgba(63,94,251,0) 100%)" });
-    css(Lm, { left: "1450px", top: "790px", width: "900px", height: "600px", borderRadius: "50%",
-      background: "radial-gradient(closest-side, rgba(184,255,60,0.42), rgba(184,255,60,0) 100%)" });
+    const icons = ICON_TILES.map((ic) => {
+      const e = $("div", "abs", r, tileFace(ic, TS));
+      css(e, { left: `${TILES[ic.i].x}px`, top: `${TILES[ic.i].y}px`, width: `${TS}px`, height: `${TS}px`, borderRadius: "14px", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 12px 30px -10px rgba(0,0,0,.35)" });
+      return e;
+    });
+    for (let n = 0; n < 7; n++) sfx(tMosaic + 0.15 + n * 0.09, "ui_select", -27, { pan: (n % 2 ? 0.4 : -0.4) });
     return (t) => {
-      const v = auraLevel(t);
-      L.style.opacity = (v * 0.95).toFixed(3);
-      R.style.opacity = v.toFixed(3);
-      Lm.style.opacity = (v * 0.8).toFixed(3);
-      L.style.transform = `translate(${Math.sin(t * 0.37) * 70}px, ${(1 - v) * 160 + Math.cos(t * 0.29) * 30}px)`;
-      R.style.transform = `translate(${Math.cos(t * 0.31) * 80}px, ${(1 - v) * 180 + Math.sin(t * 0.23) * 30}px)`;
-      Lm.style.transform = `translate(${Math.sin(t * 0.41) * 60}px, ${(1 - v) * 200}px)`;
+      els.forEach((e, i) => { const tl = TILES[i]; e.style.opacity = (tl.a * tw(t, tMosaic + tl.d * 0.5, tMosaic + tl.d * 0.5 + 0.35)).toFixed(3); });
+      icons.forEach((e, n) => {
+        const k = tw(t, tMosaic + 0.15 + n * 0.08, tMosaic + 0.5 + n * 0.08, E.outBack);
+        e.style.opacity = clamp(k * 1.5).toFixed(3);
+        e.style.transform = `scale(${0.6 + 0.4 * k})`;
+      });
     };
   });
 
-  // ------------------------------------------------------------ B0 hook (0 - 5.1)
-  beat("back", 0, 5.2, (r) => {
-    const a = kinetic(r, [[["Your", 0.0], ["next", 0.16]], [["customer", 0.42]], [["asks", 1.28], ["AI.", 1.5, "serif grad"]]], { x: 100, y: 120, size: 150 });
-    const b = kinetic(r, [[["Never", 4.0], ["hears", 4.28]], [["your", 4.54], ["name.", 4.72, "serif"]]], { x: 100, y: 150, size: 124 });
+  // ---------------- 2. White canvas: scattered tiles + "They ask ChatGPT..." -> tiles assemble -> shortlist card
+  const tGives = P("It gives");
+  const tCard = tGives + 0.55;
+  beat("back", tHookEnd, tThumb + 0.6, (r) => { canvas(r, "white"); return () => {}; });
+  const CARD = { w: 980, h: 760 };
+  beat("front", tHookEnd, tLine3 + 0.1, (r) => {
+    const clearZone = (tl) => tl.x + TS > 380 && tl.x < 1540 && tl.y + TS > 380 && tl.y < 660;
+    const keep = TILES.map((tl, i) => ({ tl, i })).filter(({ tl, i }) => !clearZone(tl) && (tl.a > 0.2 || ICON_TILES.some((x) => x.i === i)));
+    const cols = 12, size = 64, gap = 10;
+    const gx = W / 2 - (cols * (size + gap)) / 2, gy = H / 2 - (Math.ceil(keep.length / cols) * (size + gap)) / 2;
+    const els = keep.map(({ tl, i }, n) => {
+      const ic = ICON_TILES.find((x) => x.i === i);
+      const e = $("div", "abs", r, ic ? tileFace(ic, TS) : "");
+      const solid = tl.a > 0.4;
+      css(e, { left: 0, top: 0, width: `${TS}px`, height: `${TS}px`, borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", transformOrigin: "0 0",
+        background: ic ? "#fff" : solid ? "#3f5efb" : "#d9e1ff", boxShadow: ic ? "0 10px 26px -12px rgba(15,27,76,.35)" : "none", border: ic ? "1.5px solid #e6e9f2" : "none" });
+      return { e, tl, n, px: gx + (n % cols) * (size + gap), py: gy + Math.floor(n / cols) * (size + gap) };
+    });
+    const txt = say(r, ["They ask *ChatGPT*", "which company to work with."], { x: 0, y: 450, align: "center", size: 64, dark: true, after: tHookEnd - 0.2, out: tGives - 0.02 });
+    sfx(tHookEnd - 0.04, "woosh_quick", -14);
+    sfx(tGives + 0.02, "whoosh_light", -15);
+    for (let n = 0; n < 8; n++) sfx(tGives + 0.05 + n * 0.035, "ui_select", -28, { pan: (n % 2 ? 0.3 : -0.3) });
     return (t) => {
-      a.update(t, 3.98);
-      b.update(t, 5.12);
-      // "your name." dissolves away: the point of the line
-      const g = tw(t, 4.85, 5.1, E.inOutCubic);
-      b.box.lastChild.style.opacity = (1 - 0.75 * g).toFixed(3);
-      blur(b.box.lastChild, 10 * g);
-    };
-  });
-  const PROMPT = "Which PR agency should we hire?";
-  const PROMPT_RECT = { x: 1080, y: 640, w: 780, h: 180, r: 34 };
-  beat("front", 1.1, 5.25, (r) => {
-    const card = $("div", "card abs", r);
-    css(card, { left: `${PROMPT_RECT.x}px`, top: `${PROMPT_RECT.y}px`, width: `${PROMPT_RECT.w}px`, height: `${PROMPT_RECT.h}px`, padding: "30px 34px", borderRadius: "34px" });
-    card.innerHTML = `<div class="tx" style="font-size:42px;font-weight:400;letter-spacing:-0.02em;color:var(--ink);white-space:nowrap"></div>
-      <div style="position:absolute;left:34px;bottom:26px;display:flex;align-items:center;gap:12px;font-size:28px;color:var(--muted)">${icon("chatgpt", 34)}<span>ChatGPT</span></div>
-      <div class="send" style="position:absolute;right:26px;bottom:22px;width:72px;height:72px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center">
-        <svg width="32" height="32" viewBox="0 0 24 24"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`;
-    const tx = card.querySelector(".tx"), send = card.querySelector(".send");
-    const h = hand(r);
-    return (t) => {
-      focus(card, t, 1.28, null, { dy: 50, scale: 0.94, blur: 16 });
-      const s = typed(PROMPT, t, 1.5, 2.85);
-      tx.innerHTML = (s || '<span style="color:var(--faint)">Ask anything</span>') + (t < 3.1 && caretOn(t) ? '<span style="color:var(--blue);font-weight:300">|</span>' : "");
-      send.style.transform = `scale(${1 - 0.1 * Math.sin(Math.PI * clamp((t - 3.05) / 0.2))})`;
-      send.style.background = t > 3.05 ? "var(--blue-deep)" : "var(--blue)";
-      h.update(t, [[2.4, 1900, 980], [3.0, 1800, 790]], 3.05, 5.0);
+      txt.update(t);
+      const drift = t - tHookEnd;
+      const asm = tw(t, tGives, tGives + 0.45, E.inOutQuint);
+      const gone = tw(t, tCard - 0.1, tCard + 0.25, E.inCubic);
+      els.forEach(({ e, tl, n, px, py }) => {
+        const jx = Math.sin(n * 1.7 + drift * 0.6) * 6, jy = Math.cos(n * 1.3 + drift * 0.5) * 6;
+        const x = lerp(tl.x + jx, px, asm), y = lerp(tl.y + jy, py, asm);
+        const s = lerp(1, size / TS, asm) * lerp(1, 0.2, gone);
+        const fx = lerp(x, W / 2 + (x - W / 2) * 0.4, gone), fy = lerp(y, H / 2 + (y - H / 2) * 0.4, gone);
+        e.style.transform = `translate(${fx}px, ${fy}px) scale(${s})`;
+        e.style.opacity = (tw(t, tHookEnd - 0.02, tHookEnd + 0.12) * (1 - gone)).toFixed(3);
+      });
     };
   });
 
-  // ------------------------------------------------------------ B1-B3 the shortlist (5.1 - 11.43)
-  beat("front", 5.08, 11.48, (r) => {
-    const S = space(r);
-    const win = $("div", "card abs", S.stage);
-    css(win, { left: "330px", top: "110px", width: "1260px", height: "800px", padding: "40px 52px", transformOrigin: "50% 40%" });
-    win.innerHTML = `
-      <div style="display:flex;align-items:center;gap:14px;font-size:30px;font-weight:500;color:var(--ink)">${icon("chatgpt", 40)}ChatGPT</div>
-      <div class="q" style="position:absolute;right:52px;top:32px;background:var(--surface);color:var(--ink);font-size:36px;font-weight:400;letter-spacing:-0.015em;padding:18px 30px;border-radius:28px 28px 8px 28px">${PROMPT}</div>
-      <div class="lead" style="margin-top:70px;font-size:34px;color:var(--body);height:44px;letter-spacing:-0.01em"></div>
-      <div class="rows" style="margin-top:26px;display:flex;flex-direction:column;gap:14px"></div>`;
-    const lead = win.querySelector(".lead"), q = win.querySelector(".q"), rowsEl = win.querySelector(".rows");
-    const R = [["1", "N", "var(--c-n)", "Northlight PR", "Well-known in tech media"], ["2", "B", "var(--c-b)", "Brightwell", "Clear, flexible monthly plans"], ["3", "C", "var(--c-c)", "Cedar & Pine", "Strong B2B trade press"]];
-    const rows = R.map(([n, l, c, name, d]) => {
-      const row = $("div", "", rowsEl);
-      css(row, { display: "flex", alignItems: "center", gap: "24px", height: "104px", padding: "0 28px", borderRadius: "22px", border: "1.5px solid var(--line-soft)", position: "relative" });
-      row.innerHTML = `<span style="font-size:32px;color:var(--faint);width:40px;font-weight:400">${n}</span>${fav(l, c, 54)}
-        <span class="nm" style="font-size:38px;font-weight:500;letter-spacing:-0.02em;position:relative">${name}<span class="ul" style="position:absolute;left:0;right:0;bottom:-4px;height:6px;border-radius:3px;background:var(--lime);transform-origin:left;transform:scaleX(0)"></span></span>
-        <span style="font-size:30px;color:var(--muted)">${d}</span><span style="flex:1"></span>`;
+  // ---------------- 3. Shortlist card -> competitor / not mentioned -> collapses to one square -> thumbnail of Ben
+  beat("front", tGives, tThumb + 0.15, (r) => {
+    const glowA = $("div", "abs", r), glowB = $("div", "abs", r);
+    css(glowA, { left: "-500px", top: "560px", width: "1300px", height: "900px", borderRadius: "50%", background: "radial-gradient(closest-side, rgba(63,94,251,.32), rgba(63,94,251,0))" });
+    css(glowB, { left: "1250px", top: "-400px", width: "1200px", height: "900px", borderRadius: "50%", background: "radial-gradient(closest-side, rgba(95,208,255,.38), rgba(95,208,255,0))" });
+    const card = $("div", "abs card", r);
+    css(card, { padding: "40px 46px", overflow: "hidden", transformOrigin: "50% 50%" });
+    const inner = $("div", "", card);
+    css(inner, { width: `${CARD.w - 92}px` });
+    inner.innerHTML = `
+      <div style="display:flex;justify-content:flex-end"><span style="background:var(--surface);border-radius:22px 22px 6px 22px;padding:16px 26px;font-size:30px;color:var(--ink)">Best sales platform for a B2B startup?</span></div>
+      <div style="display:flex;align-items:center;gap:14px;margin-top:26px;font-size:28px;color:var(--muted)">${icon("chatgpt", 38)}<span>ChatGPT</span></div>
+      <div style="font-size:32px;color:var(--body);margin-top:16px">Here's a shortlist worth comparing:</div>
+      <div class="rows" style="margin-top:22px;display:flex;flex-direction:column;gap:14px"></div>`;
+    const rows = [["1", "R", "#d6608a", "Revora", "Enterprise outbound"], ["2", "L", "#2aa5b0", "Leadsmith", "Data enrichment"], ["3", "P", "#e0913a", "Pipeworks", "Pipeline automation"]].map(([n, l, c, name, d]) => {
+      const row = $("div", "", inner.querySelector(".rows"));
+      css(row, { display: "flex", alignItems: "center", gap: "22px", height: "96px", padding: "0 24px", borderRadius: "18px", border: "1.5px solid var(--line)" });
+      row.innerHTML = `<span style="width:30px;font-size:30px;color:var(--faint)">${n}</span>${fav(l, c, 52)}
+        <span style="font-size:36px;font-weight:500;letter-spacing:-0.02em;position:relative;z-index:0">${name}<span class="mk" style="position:absolute;left:-6px;right:-6px;bottom:2px;height:14px;background:var(--lime);border-radius:4px;z-index:-1;transform-origin:left;transform:scaleX(0)"></span></span>
+        <span style="font-size:28px;color:var(--muted)">${d}</span><span style="flex:1"></span>`;
       return row;
     });
-    const comp = $("span", "", rows[0], "Competitor");
-    css(comp, { fontSize: "28px", fontWeight: 500, color: "var(--blue-deep)", border: "1.5px solid var(--blue)", padding: "6px 20px", borderRadius: "999px" });
-    const ghost = $("div", "", rowsEl);
-    css(ghost, { display: "flex", alignItems: "center", gap: "24px", height: "104px", padding: "0 28px", borderRadius: "22px", border: "2px dashed #b4b9cc" });
-    ghost.innerHTML = `<span style="font-size:32px;color:#b4b9cc;width:40px">–</span>${fav("V", "#c3c7d6", 54)}
-      <span style="font-size:38px;font-weight:500;color:#8d93ab;letter-spacing:-0.02em">Venture PR</span><span style="font-size:30px;color:var(--faint)">your brand</span><span style="flex:1"></span>`;
+    const tagC = $("span", "", rows[0], "Competitor");
+    css(tagC, { fontSize: "26px", color: "var(--blue)", border: "1.5px solid var(--blue)", padding: "5px 16px", borderRadius: "999px" });
+    const ghost = $("div", "", inner.querySelector(".rows"));
+    css(ghost, { display: "flex", alignItems: "center", gap: "22px", height: "96px", padding: "0 24px", borderRadius: "18px", border: "2px dashed #c3c8d8" });
+    ghost.innerHTML = `<span style="width:30px;font-size:30px;color:#c3c8d8">–</span>${fav("C", "#c3c8d8", 52)}<span style="font-size:36px;font-weight:500;color:#9aa1ba;letter-spacing:-0.02em">Closewise</span><span style="font-size:28px;color:var(--faint)">your brand</span><span style="flex:1"></span>`;
     const nm = $("span", "", ghost, "Not mentioned");
-    css(nm, { fontSize: "28px", fontWeight: 500, color: "var(--danger)", border: "1.5px solid #f0a5b0", background: "#fdecef", padding: "6px 20px", borderRadius: "999px" });
-    const dots = $("div", "abs", win);
-    css(dots, { left: "52px", top: "150px", display: "flex", gap: "10px" });
-    const dd = [0, 1, 2].map(() => { const d = $("span", "", dots); css(d, { width: "14px", height: "14px", borderRadius: "50%", background: "var(--faint)" }); return d; });
+    css(nm, { fontSize: "26px", color: "var(--danger)", background: "#fdecef", padding: "6px 16px", borderRadius: "999px" });
+    const wl = $("div", "abs", r, "Would you"), wr = $("div", "abs", r, "know?");
+    css(wl, { right: `${W / 2 + 90}px`, top: "500px", fontSize: "64px", color: "var(--ink)", letterSpacing: "-0.02em" });
+    css(wr, { left: `${W / 2 + 90}px`, top: "500px", fontSize: "64px", color: "var(--blue)", letterSpacing: "-0.02em" });
+    sfx(tCard - 0.05, "pop", -20);
+    sfx(P("competitor's") + 0.05, "shimmer_coin", -19);
+    sfx(P("you're") + 0.05, "whoosh_short", -24);
+    sfx(P("not.") + 0.02, "impact_low", -19, { len: 0.8 });
+    sfx(tWould - 0.12, "woosh_quick", -15);
     return (t) => {
-      S.update(t, 5.1, 11.43, { from: PROMPT_RECT });
-      // 3D float: settles from a tilt, then the push toward the list
-      const settle = tw(t, 5.1, 6.6, E.outQuint);
-      const push = tw(t, 9.4, 10.4, E.inOutCubic);
-      win.style.transform = `translateZ(${lerp(-120, 0, settle) + push * 120}px) rotateX(${lerp(12, 3, settle) - push * 1.5}deg) rotateY(${lerp(-10, -2, settle) + Math.sin(t * 0.5) * 0.6}deg) translateY(${-push * 40}px)`;
-      focus(q, t, 5.15, null, { dy: 20, blur: 10, din: 0.4 });
-      dots.style.display = t > 5.9 && t < 8.24 ? "flex" : "none";
-      dd.forEach((d, i) => { d.style.opacity = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * 8 - i * 0.9)); });
-      lead.textContent = typed("Here's a shortlist of strong options:", t, 8.24, 8.62);
-      rows.forEach((row, i) => focus(row, t, 8.5 + i * 0.15, null, { dy: 40, blur: 14, din: 0.5 }));
-      rows[0].querySelector(".ul").style.transform = `scaleX(${tw(t, 9.58, 9.95, E.outExpo)})`;
-      rows[0].style.background = t > 9.6 ? `rgba(184,255,60,${0.12 * tw(t, 9.6, 9.9)})` : "transparent";
-      focus(comp, t, 9.95, null, { dy: 0, dx: 24, blur: 8, din: 0.4 });
-      focus(ghost, t, 10.62, null, { dy: 40, blur: 14, din: 0.5 });
-      const shake = t > 10.86 ? Math.sin((t - 10.86) * 55) * 9 * Math.exp(-(t - 10.86) * 9) : 0;
-      focus(nm, t, 10.84, null, { dy: 0, scale: 0.85, blur: 8, din: 0.35 });
-      nm.style.transform += ` translateX(${shake}px)`;
+      const a = tw(t, tCard - 0.12, tCard + 0.35, E.outExpo);
+      const k = tw(t, tWould - 0.12, tWould + 0.28, E.inOutQuint);
+      const w = lerp(CARD.w, 96, k), h = lerp(CARD.h, 96, k);
+      css(card, { left: `${W / 2 - w / 2}px`, top: `${H / 2 - h / 2 + lerp(0, 18, k)}px`, width: `${w}px`, height: `${h}px`, borderRadius: `${lerp(22, 20, k)}px`, background: k > 0.55 ? "#3f5efb" : "#fff" });
+      card.style.opacity = (a * (1 - tw(t, tThumb + 0.02, tThumb + 0.1))).toFixed(3);
+      card.style.transform = `scale(${lerp(0.9, 1, a)})`;
+      inner.style.opacity = (1 - tw(t, tWould - 0.12, tWould + 0.02)).toFixed(3);
+      glowA.style.opacity = glowB.style.opacity = (a * (1 - k)).toFixed(3);
+      rows.forEach((row, i) => show(row, t, tCard + 0.1 + i * 0.12, null, { dy: 26, blur: 8, din: 0.35 }));
+      rows[0].querySelector(".mk").style.transform = `scaleX(${tw(t, P("competitor's"), P("competitor's") + 0.3, E.outExpo)})`;
+      show(tagC, t, P("competitor's") + 0.15, null, { dy: 0, dx: 20, din: 0.35 });
+      show(ghost, t, P("you're") - 0.05, null, { dy: 30, din: 0.35 });
+      show(nm, t, P("not."), null, { dy: 0, scale: 0.85, din: 0.3, e: E.outBack });
+      const sh = t > P("not.") ? Math.sin((t - P("not.")) * 50) * 8 * Math.exp(-(t - P("not.")) * 8) : 0;
+      nm.style.transform += ` translateX(${sh}px)`;
+      show(wl, t, tWould, tExpand + 0.05, { dy: 14, blur: 8, din: 0.3, dout: 0.2 });
+      show(wr, t, P("know?"), tExpand + 0.05, { dy: 14, blur: 8, din: 0.3, dout: 0.2 });
     };
   });
+  key(tHookEnd - 0.001, {}, "lin");
+  key(tHookEnd, { show: 0 }, "step");
+  key(tThumb, { show: 1, x: W / 2 - 48, y: H / 2 - 48 + 18, w: 96, h: 96, r: 20 }, "step");
+  key(tExpand + 0.45, { z: 1.0 }, "inOutQuint");
+  sfx(tThumb + 0.05, "whoosh_light", -12);
 
-  // ------------------------------------------------------------ B4 would you know (11.43 - 12.53)
-  beat("back", 11.4, 12.6, (r) => {
-    const k = kinetic(r, [[["Would", 11.47], ["you", 11.58]], [["know?", 11.7, "serif grad"]]], { x: 100, y: 130, size: 150 });
-    return (t) => k.update(t, 12.55);
-  });
-
-  // ------------------------------------------------------------ B5 Ben (12.53 - 15.3): name over his body, like "Arist / Diagnostic"
-  beat("front", 12.5, 15.4, (r) => {
-    const k = kinetic(r, [[["Ben", 12.86]], [["Founder,", 13.84, "mist"], ["Seekworthy", 14.2, "mist"]]], { x: 1180, y: 640, size: 96, weight: 400, ls: "-0.035em", lh: "1.05" });
-    k.box.lastChild.style.fontSize = "52px";
-    k.box.lastChild.style.marginTop = "10px";
-    return (t) => k.update(t, 15.3);
-  });
-
-  // ------------------------------------------------------------ B6 AI engines floating around Ben (15.0 - 18.75)
-  beat("back", 15.0, 18.8, (r) => {
-    // depth: far chips are smaller and softer, like the reel's floating UI
-    const P = [[110, 150, 1.0], [300, 330, 0.82], [90, 500, 0.9], [1420, 120, 0.86], [1560, 300, 1.0], [1430, 470, 0.8]];
-    const chips = ENG.map(([k, n], i) => {
-      const c = $("div", "pill abs", r, `${icon(k, 46)}<span>${n}</span>`);
-      css(c, { left: `${P[i][0]}px`, top: `${P[i][1]}px`, padding: "18px 34px 18px 20px", fontSize: "38px", fontWeight: 400, letterSpacing: "-0.02em" });
+  // ---------------- 4. I'm Ben / we help businesses see how they show up in AI answers
+  const tWeHelp = P("We help");
+  const tBut = SEG("but when").t0;
+  beat("front", tBen, tBut + 0.05, (r) => {
+    const a = say(r, ["I'm Ben,", "founder of *Seekworthy.*"], { x: 110, y: 790, after: tBen - 0.1, out: tWeHelp - 0.02 });
+    const b = say(r, ["We help businesses see", "how they show up in *AI answers.*"], { x: 1810, y: 790, align: "right", after: tWeHelp - 0.1, out: tBut + 0.02 });
+    const chips = ENG.map(([k], i) => {
+      const c = $("div", "abs gd glass", r, `<div style="width:52px;height:52px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center">${icon(k, 34)}</div>`);
+      css(c, { left: `${100 + i * 108}px`, top: "96px", width: "88px", height: "88px", borderRadius: "20px", display: "flex", alignItems: "center", justifyContent: "center" });
       return c;
     });
-    return (t) => chips.forEach((c, i) => {
-      const at = 15.42 + [0, 2, 4, 1, 3, 5][i] * 0.13, z = P[i][2];
-      focus(c, t, at, 18.74, { dy: 40, scale: 0.85, blur: 16, din: 0.6 });
-      c.style.transform += ` scale(${z}) translateY(${Math.sin(t * 1.1 + i * 1.7) * 9}px)`;
-      const extra = (1 - z) * 9;
-      if (extra > 0.3) c.style.filter = `blur(${(parseFloat((c.style.filter.match(/[\d.]+/) || [0])[0]) + extra).toFixed(2)}px)`;
-    });
-  });
-
-  // ------------------------------------------------------------ B7 / B8 (18.71 - 23.89)
-  beat("back", 18.7, 21.45, (r) => {
-    const k = kinetic(r, [[["When", 18.84], ["a", 18.92], ["buyer", 19.06]], [["asks", 19.4], ["AI", 20.2]], [["for", 20.54, "serif"], ["advice.", 20.8, "serif grad"]]], { x: 100, y: 130, size: 108 });
-    return (t) => k.update(t, 21.42);
-  });
-  beat("front", 19.3, 21.45, (r) => {
-    const c = $("div", "pill abs", r, `${icon("claude", 40)}<span>Best PR agency for startups?</span>`);
-    css(c, { left: "1230px", top: "700px", padding: "22px 36px 22px 24px", fontSize: "34px", fontWeight: 400, letterSpacing: "-0.015em" });
-    return (t) => { focus(c, t, 19.5, 21.4, { dy: 40, scale: 0.94 }); c.style.transform += ` translateY(${Math.sin(t * 1.2) * 6}px)`; };
-  });
-  beat("back", 21.38, 23.95, (r) => {
-    const k = kinetic(r, [[["Are", 21.98], ["you", 22.16]], [["part", 22.92], ["of", 23.04]], [["the", 23.14, "serif"], ["answer?", 23.24, "serif grad"]]], { x: 100, y: 130, size: 112 });
-    return (t) => k.update(t, 23.9);
-  });
-
-  // ------------------------------------------------------------ B9 "Meet Seekworthy" (23.9 - 25.8): the reference's hero frame
-  beat("back", 23.9, 25.95, (r) => {
-    const k = kinetic(r, [[["Meet", 24.3, "grad"]]], { x: 40, y: 40, size: 290, ls: "-0.055em" });
-    return (t) => k.update(t, 25.9);
-  });
-  beat("front", 23.9, 25.95, (r) => {
-    const box = $("div", "abs", r);
-    css(box, { left: "1150px", top: "650px" });
-    const l1 = $("div", "", box, `<img src="${MARK}" style="width:92px;height:86px;margin-right:22px;vertical-align:-6px"><span>Seekworthy</span>`);
-    css(l1, { fontSize: "124px", fontWeight: 400, letterSpacing: "-0.045em", whiteSpace: "nowrap", lineHeight: "1" });
-    const l2 = $("div", "", box, "AI visibility tracking");
-    css(l2, { fontSize: "52px", fontWeight: 300, color: "var(--mist)", letterSpacing: "-0.02em", marginTop: "14px", marginLeft: "116px" });
-    return (t) => { focus(l1, t, 24.78, 25.9, { dy: 30, blur: 20, din: 0.6 }); focus(l2, t, 25.0, 25.9, { dy: 20, blur: 14 }); };
-  });
-
-  // ------------------------------------------------------------ B10-B11 brand + dashboard (25.75 - 32.1)
-  beat("front", 25.7, 32.15, (r) => {
-    const S = space(r, { frames: [[240, "v"], [1680, "v"], [140, "h"], [940, "h"]] });
-    const lock = $("div", "abs", S.stage, `<img src="${MARK}" style="width:150px;height:140px"><span>Seekworthy</span>`);
-    css(lock, { left: 0, top: "460px", width: `${W}px`, display: "flex", justifyContent: "center", alignItems: "center", gap: "34px",
-      fontFamily: "Geist", fontSize: "128px", fontWeight: 600, letterSpacing: "-0.045em", transformOrigin: "50% 50%" });
-    const glow = $("div", "abs", S.stage);
-    css(glow, { left: "460px", top: "260px", width: "1000px", height: "560px", borderRadius: "50%", background: "radial-gradient(closest-side, rgba(63,94,251,.55), rgba(63,94,251,0))" });
-    S.stage.insertBefore(glow, lock);
-    // dashboard
-    const card = $("div", "card abs", S.stage);
-    css(card, { left: "210px", top: "180px", width: "1500px", height: "740px", padding: "40px 50px", transformOrigin: "50% 30%" });
-    card.innerHTML = `
-      <div style="display:flex;align-items:center;gap:18px">${fav("V", "var(--c-v)", 56)}
-        <span style="font-size:40px;font-weight:500;letter-spacing:-0.025em">Venture PR</span><span style="flex:1"></span>
-        <span style="width:12px;height:12px;border-radius:50%;background:#10b981"></span><span style="font-size:28px;color:var(--muted)">Updated 2h ago</span></div>
-      <div class="stats" style="display:flex;gap:22px;margin-top:30px"></div>
-      <div style="display:flex;gap:44px;margin-top:30px">
-        <div style="flex:1.15"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:32px;font-weight:500;letter-spacing:-0.02em">Visibility trend</span><span style="font-size:28px;color:var(--muted)">14 days</span></div>
-          <svg class="chart" width="720" height="250" viewBox="0 0 720 250" style="margin-top:12px;overflow:visible">
-            <defs><linearGradient id="gfill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f5efb" stop-opacity=".22"/><stop offset="1" stop-color="#3f5efb" stop-opacity="0"/></linearGradient></defs>
-            <g stroke="#eef0f5" stroke-width="2"><line x1="0" y1="40" x2="720" y2="40"/><line x1="0" y1="125" x2="720" y2="125"/><line x1="0" y1="210" x2="720" y2="210"/></g>
-            <path class="area" fill="url(#gfill)" d=""/><path class="line" fill="none" stroke="#3f5efb" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" d=""/>
-            <circle class="dot" r="10" fill="#3f5efb" stroke="#fff" stroke-width="5"/></svg></div>
-        <div style="flex:1"><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:32px;font-weight:500;letter-spacing:-0.02em">By model</span><span style="font-size:28px;color:var(--muted)">Visibility</span></div>
-          <div class="models" style="margin-top:26px;display:flex;flex-direction:column;gap:28px"></div></div></div>`;
-    const stats = card.querySelector(".stats");
-    const ST = [["Visibility", 68, "", "+3"], ["Rank", 3, "#", "+2", "/10"], ["Mentions", 142, "", "+12"]].map(([lab, v, pre, d, suf]) => {
-      const s = $("div", "", stats);
-      css(s, { flex: 1, borderRadius: "22px", padding: "22px 28px", background: "var(--surface)" });
-      s.innerHTML = `<div class="label">${lab}</div><div style="display:flex;align-items:baseline;gap:12px;margin-top:4px">
-        <span class="v" style="font-size:104px;font-weight:300;letter-spacing:-0.05em;line-height:1"></span>${suf ? `<span style="font-size:36px;color:var(--faint);font-weight:300">${suf}</span>` : ""}
-        <span class="d" style="margin-left:auto;font-size:30px;font-weight:500;color:var(--navy);background:var(--lime);padding:4px 14px;border-radius:999px">↗ ${d}</span></div>`;
-      return { s, v, pre, val: s.querySelector(".v"), d: s.querySelector(".d") };
-    });
-    const pts = [52, 55, 54, 58, 57, 60, 59, 61, 63, 62, 64, 66, 65, 68];
-    const xy = pts.map((v, i) => [i * (720 / 13), 230 - (v - 45) * 7.6]);
-    const dl = "M" + xy.map((p) => p.join(",")).join(" L");
-    const line = card.querySelector(".line"), area = card.querySelector(".area"), dot = card.querySelector(".dot");
-    line.setAttribute("d", dl); area.setAttribute("d", dl + " L720,250 L0,250 Z");
-    line.style.strokeDasharray = "1400";
-    const models = card.querySelector(".models");
-    const M = [["chatgpt", "ChatGPT", 78], ["claude", "Claude", 64], ["perplexity", "Perplexity", 52], ["gemini", "Gemini", 47]].map(([k, n, v]) => {
-      const row = $("div", "", models);
-      css(row, { display: "flex", alignItems: "center", gap: "16px" });
-      row.innerHTML = `${icon(k, 36)}<span style="width:170px;font-size:30px">${n}</span>
-        <span style="flex:1;height:12px;border-radius:6px;background:#eef0f5;overflow:hidden"><span class="b" style="display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#002afe,#00baff);transform-origin:left"></span></span>
-        <span class="nv" style="width:64px;text-align:right;font-size:36px;font-weight:300;letter-spacing:-0.03em"></span>`;
-      return { v, b: row.querySelector(".b"), nv: row.querySelector(".nv") };
-    });
+    const at = (i) => P("businesses") + 0.15 + i * 0.3;
+    ENG.forEach((_, i) => sfx(at(i), "ui_hint", -24, { pan: -0.6 + i * 0.1 }));
     return (t) => {
-      S.update(t, 25.72, 32.1, { din: 0.45 });
-      // brand moment: mark + wordmark focus in on the music lift, then lift away to make room
-      const ln = tw(t, 25.85, 26.6, E.outExpo);
-      const away = tw(t, 26.9, 27.45, E.inOutQuint);
-      lock.style.opacity = (ln * (1 - away)).toFixed(3);
-      lock.style.transform = `translateY(${lerp(30, 0, ln) - away * 120}px) scale(${lerp(0.94, 1, ln) * lerp(1, 0.8, away)})`;
-      blur(lock, 20 * (1 - ln) + 16 * away);
-      glow.style.opacity = (0.6 + 0.4 * Math.sin(t * 2)) * (1 - away * 0.6);
-      // dashboard floats in from depth and settles while the camera drifts
-      const a = tw(t, 27.15, 28.1, E.outQuint);
-      const drift = tw(t, 27.2, 32.1, E.inOutCubic);
-      card.style.opacity = a.toFixed(3);
-      blur(card, 18 * (1 - a));
-      card.style.transform = `translateZ(${lerp(-400, 0, a)}px) translateY(${lerp(80, 0, a)}px) rotateX(${lerp(18, 6, a) - drift * 4}deg) rotateY(${lerp(-16, -5, a) + drift * 7}deg)`;
-      ST.forEach((s, i) => {
-        s.val.textContent = s.pre + count(t, 27.5 + i * 0.1, 28.7, s.v);
-        focus(s.d, t, 28.5 + i * 0.1, null, { dy: 0, scale: 0.8, blur: 8, din: 0.4 });
-      });
-      const k = tw(t, 28.15, 29.6, E.inOutCubic);
-      line.style.strokeDashoffset = `${1400 * (1 - k)}`;
-      area.style.opacity = tw(t, 28.6, 29.8).toFixed(3);
-      const seg = Math.min(12.999, k * 13), i0 = Math.floor(seg), f = seg - i0;
-      dot.setAttribute("cx", lerp(xy[i0][0], xy[i0 + 1][0], f));
-      dot.setAttribute("cy", lerp(xy[i0][1], xy[i0 + 1][1], f));
-      dot.style.opacity = k > 0.01 ? 1 : 0;
-      M.forEach((m, i) => {
-        const g = tw(t, 29.95 + i * 0.12, 30.7 + i * 0.12, E.outQuint);
-        m.b.style.transform = `scaleX(${g * m.v / 100})`;
-        m.nv.textContent = Math.round(m.v * g);
-      });
+      a.update(t); b.update(t);
+      chips.forEach((c, i) => show(c, t, at(i), tBut + 0.02, { dy: 10, scale: 0.7, din: 0.35, e: E.outBack, blur: 6 }));
     };
   });
+  beat("back", tWeHelp - 0.2, tBut + 0.1, (r) => aura(r, tWeHelp - 0.2, tBut + 0.05, "left", 0.8));
 
-  // ------------------------------------------------------------ website card (used twice)
-  function websiteCard(r, x, y, url, tType, tTap) {
-    const card = $("div", "card abs", r);
-    css(card, { left: `${x}px`, top: `${y}px`, width: "720px", padding: "34px 34px 30px", borderRadius: "34px" });
-    card.innerHTML = `<div style="font-size:30px;color:var(--muted);letter-spacing:-0.01em">Your website</div>
-      <div style="margin-top:16px;height:104px;border-radius:999px;background:var(--surface);display:flex;align-items:center;gap:18px;padding:0 16px 0 34px">
-        <span class="u" style="flex:1;font-size:42px;font-weight:400;letter-spacing:-0.02em;color:var(--ink)"></span>
-        <span class="btn" style="width:76px;height:76px;border-radius:50%;background:var(--blue);display:flex;align-items:center;justify-content:center">
-          <svg width="34" height="34" viewBox="0 0 24 24"><path d="M5 12h14M13 5.5l6.5 6.5-6.5 6.5" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
-      <div style="margin-top:18px;display:flex;align-items:center;gap:12px;font-size:28px;color:var(--muted)">See your AI rank on every major AI
-        <span style="display:flex;gap:6px;margin-left:auto">${ENG.slice(0, 4).map(([k]) => icon(k, 28)).join("")}</span></div>`;
-    const u = card.querySelector(".u"), btn = card.querySelector(".btn");
-    const h = hand(r);
-    return (t, tin, tout) => {
-      focus(card, t, tin, tout, { dy: 50, scale: 0.95, blur: 16 });
-      const s = typed(url, t, tType, tType + 0.6);
-      u.innerHTML = s ? s + (t < tTap - 0.25 && caretOn(t) ? '<span style="color:var(--blue);font-weight:300">|</span>' : "") : '<span style="color:var(--faint)">yourbrand.com</span>';
-      btn.style.transform = `scale(${1 - 0.1 * Math.sin(Math.PI * clamp((t - tTap) / 0.2))})`;
-      btn.style.background = t > tTap && t < tTap + 0.4 ? "var(--blue-deep)" : "var(--blue)";
-      const bx = x + 620, by = y + 140;
-      h.update(t, [[tType + 0.2, bx + 300, by + 380], [tTap - 0.05, bx, by]], tTap, tout);
+  // ---------------- 5. when a buyer asks AI for advice / part of the answer
+  const tNeed = P("you need to know");
+  const tThats = SEG("that's why").t0;
+  beat("front", tBut, tThats + 0.05, (r) => {
+    const a = say(r, ["But when a buyer", "asks AI for *advice,*"], { x: 110, y: 96, after: tBut - 0.1, out: tNeed - 0.02 });
+    const b = say(r, ["you need to know if you show up", "as *part of the answer.*"], { x: 1810, y: 800, align: "right", after: tNeed - 0.1, out: tThats + 0.02 });
+    const q = $("div", "abs gd glass pill", r, `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4" stroke-linecap="round"/></svg><span>Best sales platform for a 20-rep team?</span>`);
+    css(q, { right: "110px", top: "470px", padding: "20px 30px", fontSize: "32px", color: "#fff", borderRadius: "18px" });
+    sfx(P("asks", tBut) - 0.08, "whoosh_short", -22);
+    return (t) => { a.update(t); b.update(t); show(q, t, P("asks", tBut) - 0.05, tNeed + 0.1, { dy: 16, scale: 0.96 }); };
+  });
+  key(tNeed - 0.001, { z: 1.03 }, "lin");
+  key(tNeed, { z: 1.2, ay: 0.3 }, "step");
+  key(tThats - 0.001, { z: 1.24, ay: 0.3 }, "lin");
+  key(tThats, { z: 1.0 }, "step");
+
+  // ---------------- 6. "Meet / Seekworthy" -> footage drops into a card -> card wall -> dot grid + app icon
+  const tMeet = P("built") - 0.05;
+  const tShrink = PE("built Seekworthy") + 0.02;
+  const tGap = SEG("GAP logo").t0, tHelps = SEG("it helps").t0;
+  beat("back", tThats, tShrink + 0.3, (r) => {
+    const m = $("div", "abs", r, "Meet");
+    css(m, { left: "70px", top: "40px", fontSize: "250px", fontWeight: 400, letterSpacing: "-0.04em", lineHeight: "1",
+      background: "linear-gradient(180deg, #dfe5ff 0%, #9fb0ff 50%, #6f88ff 100%)", webkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" });
+    m.style.webkitBackgroundClip = "text";
+    const au = aura(r, tThats, tShrink + 0.2, "left", 0.7);
+    return (t) => { au(t); show(m, t, tMeet, tShrink + 0.05, { dy: 20, blur: 14, din: 0.5, dout: 0.2 }); };
+  });
+  beat("front", tThats, tShrink + 0.3, (r) => {
+    const s = $("div", "abs", r, "Seekworthy");
+    css(s, { right: "110px", top: "700px", fontSize: "132px", fontWeight: 400, letterSpacing: "-0.04em", color: "#fff", textShadow: "0 2px 30px rgba(0,0,0,.3)" });
+    const au = aura(r, tThats + 0.2, tShrink + 0.2, "right", 0.55);
+    return (t) => { au(t); show(s, t, P("Seekworthy", tThats) - 0.02, tShrink + 0.05, { dy: 20, blur: 14, din: 0.5, dout: 0.2 }); };
+  });
+  const CW = 720, CH = 405;
+  const BENCARD = { x: W / 2 - CW / 2, y: H / 2 - CH / 2 };
+  const tWall = tShrink + 0.32, tZoomEnd = tWall + 0.45, tDots = Math.max(tGap + 0.4, tZoomEnd + 0.05);
+  beat("back", tShrink - 0.02, tHelps + 0.3, (r) => {
+    canvas(r, "blue");
+    const world = $("div", "abs", r);
+    css(world, { left: 0, top: 0, width: `${W}px`, height: `${H}px`, transformOrigin: "50% 50%" });
+    const frag = (i) => {
+      const kinds = [
+        () => `<div style="display:flex;gap:16px;align-items:center">${icon("chatgpt", 40)}<div style="height:14px;width:300px;background:#e8ecf6;border-radius:7px"></div></div><div style="margin-top:28px;display:flex;gap:10px;align-items:flex-end;height:150px">${[60, 95, 70, 120, 88, 140, 104].map((h) => `<div style="flex:1;height:${h}px;border-radius:8px;background:${h > 110 ? "#3f5efb" : "#d9e1ff"}"></div>`).join("")}</div>`,
+        () => `<div style="font-size:28px;color:var(--muted)">Visibility</div><div style="font-size:120px;font-weight:300;letter-spacing:-0.05em;color:var(--ink);line-height:1.1">68%</div><div style="height:12px;border-radius:6px;background:#e8ecf6"><div style="height:12px;width:68%;border-radius:6px;background:#3f5efb"></div></div>`,
+        () => ENG.slice(0, 4).map(([k, n]) => `<div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">${icon(k, 34)}<span style="font-size:26px;color:var(--ink);width:150px">${n}</span><div style="flex:1;height:10px;border-radius:5px;background:#e8ecf6"><div style="height:10px;width:${40 + (k.length * 7) % 50}%;border-radius:5px;background:#3f5efb"></div></div></div>`).join(""),
+      ];
+      return kinds[((i % 3) + 3) % 3]();
     };
-  }
-  beat("front", 32.0, 33.6, (r) => { const u = websiteCard(r, 100, 330, "venturepr.com", 32.3, 33.1); return (t) => u(t, 32.12, null); });
-
-  // ------------------------------------------------------------ B13b buyer questions (33.43 - 36.95)
-  beat("front", 33.4, 36.95, (r) => {
-    const S = space(r);
-    const ttl = $("div", "abs", S.stage, `What your buyers <span class="serif grad" style="font-size:1.14em">ask AI</span>`);
-    css(ttl, { left: 0, width: `${W}px`, top: "120px", textAlign: "center", fontSize: "96px", fontWeight: 300, letterSpacing: "-0.045em" });
-    const plane = $("div", "abs", S.stage);
-    css(plane, { left: "-200px", top: "330px", width: `${W + 400}px`, height: "560px", transformOrigin: "50% 0%", transform: "rotateX(24deg)" });
-    const Rr = [
-      [["chatgpt", "Best PR agency for a Series A startup?"], ["gemini", "Which PR firm is best for B2B tech?"], ["perplexity", "Top PR agencies for AI startups"], ["claude", "Who handles launch PR for SaaS?"]],
-      [["claude", "PR agency or freelancer for a seed round?"], ["chatgpt", "How much does startup PR cost?"], ["grok", "Best PR agencies for fintech"], ["gemini", "Who gets startups into TechCrunch?"]],
-      [["perplexity", "Is Venture PR good for startups?"], ["deepseek", "Venture PR vs Northlight PR"], ["chatgpt", "PR firms that work with early teams"], ["claude", "Best PR for a product launch"]],
-    ];
-    const tracked = [[0, 0, 34.3], [1, 1, 34.62], [2, 0, 34.95]];
-    const rows = Rr.map((items, ri) => {
-      const row = $("div", "abs", plane);
-      css(row, { left: 0, top: `${ri * 150}px`, display: "flex", gap: "26px", whiteSpace: "nowrap" });
-      const chips = [...items, ...items].map(([k, q]) => {
-        const c = $("div", "pill", row, `${icon(k, 40)}<span>${q}</span>`);
-        css(c, { padding: "24px 38px 24px 24px", fontSize: "36px", fontWeight: 400, letterSpacing: "-0.015em", border: "2px solid transparent" });
-        const chk = $("span", "", c, `<svg width="26" height="26" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#0f1b4c" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`);
-        css(chk, { width: "0px", height: "46px", borderRadius: "50%", background: "var(--lime)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" });
-        return { c, chk };
-      });
-      return { row, chips };
-    });
-    const off = [-80, -640, -280];
+    const minis = [];
+    for (let gy = -2; gy <= 2; gy++) for (let gx = -2; gx <= 2; gx++) {
+      if (gx === 0 && gy === 0) continue;
+      const c = $("div", "abs card", world, frag(gx * 7 + gy * 3 + 20));
+      css(c, { left: `${BENCARD.x + gx * (CW + 48)}px`, top: `${BENCARD.y + gy * (CH + 48)}px`, width: `${CW}px`, height: `${CH}px`, padding: "36px 40px", borderRadius: "28px" });
+      minis.push({ c, gx, gy });
+    }
+    const dots = [];
+    for (let yy = 0; yy < 7; yy++) for (let xx = 0; xx < 11; xx++) {
+      const d = $("div", "abs", r);
+      css(d, { left: `${W / 2 - 5 * 150 + xx * 150 - 18}px`, top: `${H / 2 - 3 * 150 + yy * 150 - 18}px`, width: "36px", height: "36px", borderRadius: "8px", background: "#fff" });
+      dots.push({ d, k: Math.hypot(xx - 5, yy - 3) });
+    }
+    const app = $("div", "abs", r, `<img src="${MARK}" style="width:120px;height:112px">`);
+    css(app, { left: `${W / 2 - 105}px`, top: `${H / 2 - 105}px`, width: "210px", height: "210px", borderRadius: "48px", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 0 18px rgba(255,255,255,.18), 0 30px 60px -20px rgba(10,20,90,.5)" });
+    sfx(tShrink, "woosh_slide", -12);
+    sfx(tWall - 0.05, "whoosh_light", -16);
+    sfx(tDots - 0.12, "revcym_glassy", -16);
+    sfx(tDots + 0.08, "subdrop", -10);
+    sfx(tDots + 0.1, "shimmer_success", -14);
     return (t) => {
-      S.update(t, 33.43, null, { from: { x: 100, y: 330, w: 720, h: 330, r: 34 } });
-      focus(ttl, t, 33.7, null, { dy: 30, blur: 20 });
-      rows.forEach((rw, ri) => {
-        const dir = ri % 2 ? 1 : -1;
-        rw.row.style.transform = `translateX(${off[ri] + dir * (t - 33.4) * 64}px)`;
-        rw.row.style.opacity = tw(t, 33.75 + ri * 0.12, 34.3 + ri * 0.12).toFixed(3);
-        rw.chips.forEach(({ c, chk }, ci) => {
-          const tr = tracked.find(([a, b]) => a === ri && b === ci);
-          const on = tr ? tw(t, tr[2], tr[2] + 0.35, E.outBack) : 0;
-          chk.style.width = `${46 * clamp(on)}px`;
-          chk.style.marginLeft = `${8 * clamp(on)}px`;
-          c.style.borderColor = on > 0.4 ? "var(--lime)" : "transparent";
-          c.style.boxShadow = on > 0.4 ? "0 0 0 8px rgba(184,255,60,.22), 0 20px 50px -18px rgba(5,10,34,.55)" : "0 20px 50px -18px rgba(5,10,34,.55)";
-        });
+      const zoom = tw(t, tWall, tZoomEnd, E.inOutQuint);
+      world.style.transform = `scale(${lerp(1, 0.42, zoom)})`;
+      minis.forEach(({ c, gx, gy }) => {
+        const dd = (Math.abs(gx) + Math.abs(gy)) * 0.05;
+        const k = tw(t, tShrink + 0.15 + dd, tShrink + 0.5 + dd, E.outExpo);
+        c.style.opacity = (k * (1 - tw(t, tDots - 0.2, tDots + 0.05))).toFixed(3);
+        c.style.transform = `translate(${(1 - k) * gx * 160}px, ${(1 - k) * gy * 90}px)`;
       });
-      plane.style.transform = `rotateX(${lerp(30, 20, tw(t, 33.43, 36.9, E.outCubic))}deg)`;
-      const q = tw(t, 36.55, 36.95, E.inOutCubic);
-      S.el.style.opacity = (parseFloat(S.el.style.opacity) * (1 - q)).toFixed(3);
-      blur(S.el, 18 * q);
+      dots.forEach(({ d, k }) => {
+        const p = tw(t, tDots - 0.1 + k * 0.03, tDots + 0.25 + k * 0.03, E.outBack);
+        d.style.opacity = (p * (k < 1.1 ? 0 : 0.85 - k * 0.06) * (1 - tw(t, tHelps - 0.15, tHelps + 0.1))).toFixed(3);
+        d.style.transform = `scale(${0.3 + 0.7 * p})`;
+      });
+      const ap = tw(t, tDots, tDots + 0.4, E.outBack);
+      app.style.opacity = (clamp(ap) * (1 - tw(t, tHelps - 0.05, tHelps + 0.15))).toFixed(3);
+      app.style.transform = `scale(${(0.5 + 0.5 * ap) * lerp(1, 2.2, tw(t, tHelps - 0.15, tHelps + 0.15, E.inCubic))})`;
     };
   });
+  key(tShrink - 0.001, { z: 1.0 }, "lin");
+  key(tWall, { x: BENCARD.x, y: BENCARD.y, w: CW, h: CH, r: 28 }, "inOutQuint");
+  { const s = 0.42; key(tZoomEnd, { x: W / 2 - CW * s / 2, y: H / 2 - CH * s / 2, w: CW * s, h: CH * s, r: 28 * s }, "inOutQuint"); }
+  { const s = 0.42; key(tDots - 0.05, { x: W / 2 - CW * s / 2, y: H / 2 - CH * s / 2, w: CW * s, h: CH * s, r: 28 * s, op: 1 }, "lin"); }
+  { const s = 0.3; key(tDots + 0.1, { x: W / 2 - CW * s / 2, y: H / 2 - CH * s / 2, w: CW * s, h: CH * s, r: 20, op: 0 }, "inCubic"); }
+  key(tDots + 0.11, { show: 0 }, "step");
 
-  // ------------------------------------------------------------ B15 the engines check (36.55 - 41.35)
-  const Q = "Best PR agency for a Series A startup?";
-  beat("front", 36.5, 41.4, (r) => {
-    const S = space(r);
-    const q = $("div", "pill abs", S.stage, `<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#3f5efb" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4" stroke-linecap="round"/></svg><span>${Q}</span>`);
-    css(q, { left: "50%", top: "100px", padding: "24px 42px 24px 30px", fontSize: "40px", fontWeight: 400, letterSpacing: "-0.02em", marginLeft: "-440px" });
-    const tiles = ENG.map(([k, n], i) => {
-      const tl = $("div", "glass abs", S.stage);
-      css(tl, { left: `${178 + i * 268}px`, top: "248px", width: "236px", height: "196px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px" });
-      tl.innerHTML = `<span style="width:86px;height:86px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;position:relative">${icon(k, 50)}
-        <svg class="spin" width="108" height="108" viewBox="0 0 108 108" style="position:absolute;left:-11px;top:-11px"><circle cx="54" cy="54" r="50" stroke="#00baff" stroke-width="4" fill="none" stroke-dasharray="70 330" stroke-linecap="round"/></svg>
-        <span class="ok" style="position:absolute;right:-12px;bottom:-8px;width:42px;height:42px;border-radius:50%;background:var(--lime);display:flex;align-items:center;justify-content:center;border:4px solid #050a22"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#0f1b4c" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span></span>
-        <span style="font-size:30px;font-weight:400">${n}</span>`;
-      return { tl, spin: tl.querySelector(".spin"), ok: tl.querySelector(".ok") };
+  // ---------------- 7. dashboard on the gradient canvas
+  const tAcross = P("across AI platforms");
+  const tStart = SEG("you start").t0;
+  beat("back", tHelps - 0.15, tStart + 0.02, (r) => { const c = canvas(r, "grad"); return (t) => { c.style.opacity = tw(t, tHelps - 0.15, tHelps + 0.15).toFixed(3); }; });
+  beat("front", tHelps - 0.1, tStart + 0.02, (r) => {
+    const panel = $("div", "abs gl", r);
+    css(panel, { left: "170px", top: "110px", width: "1580px", height: "860px", padding: "34px 40px", borderRadius: "32px" });
+    panel.innerHTML = `
+      <div style="display:flex;align-items:center;gap:18px">${fav("C", "#2b3560", 58, 16)}<span style="font-size:40px;color:var(--ink);letter-spacing:-0.02em">Closewise</span>
+        <span style="font-size:30px;color:var(--muted)">AI visibility</span><span style="flex:1"></span><span style="font-size:28px;color:var(--muted)">24 buyer questions · 6 engines</span></div>
+      <div class="row1" style="display:flex;gap:24px;margin-top:30px"></div>
+      <div class="row2 card" style="margin-top:24px;padding:28px 34px"></div>`;
+    const row1 = panel.querySelector(".row1"), row2 = panel.querySelector(".row2");
+    const ring = $("div", "card", row1);
+    css(ring, { flex: "1.35", height: "330px", display: "flex", alignItems: "center", gap: "30px", padding: "0 34px" });
+    ring.innerHTML = `<svg width="230" height="230" viewBox="0 0 230 230"><circle cx="115" cy="115" r="96" stroke="#e8ecf6" stroke-width="18" fill="none"/>
+      <circle class="arc" cx="115" cy="115" r="96" stroke="#3f5efb" stroke-width="18" fill="none" stroke-linecap="round" stroke-dasharray="603" stroke-dashoffset="603" transform="rotate(-90 115 115)"/>
+      <text class="pct" x="115" y="132" text-anchor="middle" font-size="58" font-family="Inter Tight" fill="#0f1b4c" letter-spacing="-2">0%</text></svg>
+      <div><div style="font-size:28px;color:var(--muted)">Visibility score</div><div style="font-size:40px;color:var(--ink);letter-spacing:-0.02em;margin-top:8px;line-height:1.2;white-space:nowrap">Named in <b class="hits" style="font-weight:500">0</b> of 24</div><div style="font-size:28px;color:var(--muted);margin-top:4px">buyer questions</div></div>`;
+    const stat = (lab, html) => { const c = $("div", "card", row1); css(c, { flex: "1", height: "330px", padding: "34px 36px" }); c.innerHTML = `<div style="font-size:28px;color:var(--muted)">${lab}</div>${html}`; return c; };
+    const rank = stat("Rank vs competitors", `<div style="font-size:150px;font-weight:300;letter-spacing:-0.06em;color:var(--ink);line-height:1.15">#<span class="rk">5</span></div><div style="font-size:28px;color:var(--muted)">of 10 tracked</div>`);
+    const ment = stat("Mentions", `<div style="font-size:150px;font-weight:300;letter-spacing:-0.06em;color:var(--ink);line-height:1.15"><span class="mn">0</span></div><div style="font-size:28px;color:#1d8a5f">↗ +12 this week</div>`);
+    row2.innerHTML = `<div style="display:flex;justify-content:space-between;font-size:30px;color:var(--ink)"><span>By AI platform</span><span style="color:var(--muted);font-size:28px">share of answers</span></div><div class="bars" style="display:flex;gap:30px;margin-top:22px"></div>`;
+    const bars = [["chatgpt", "ChatGPT", 78], ["claude", "Claude", 64], ["perplexity", "Perplexity", 59], ["gemini", "Gemini", 47], ["grok", "Grok", 36]].map(([k, n, v]) => {
+      const b = $("div", "", row2.querySelector(".bars"));
+      css(b, { flex: 1 });
+      b.innerHTML = `<div style="display:flex;align-items:center;gap:12px;font-size:28px;color:var(--ink)">${icon(k, 32)}${n}<span class="v" style="margin-left:auto;color:var(--muted)"></span></div>
+        <div style="height:12px;border-radius:6px;background:#e8ecf6;margin-top:14px"><div class="f" style="height:12px;border-radius:6px;background:linear-gradient(90deg,#3f5efb,#5fd0ff);transform-origin:left;transform:scaleX(0)"></div></div>`;
+      return { v, f: b.querySelector(".f"), vv: b.querySelector(".v") };
     });
-    const ans = $("div", "card abs", S.stage);
-    css(ans, { left: "300px", top: "500px", width: "1320px", padding: "36px 46px 40px" });
-    ans.innerHTML = `<div style="display:flex;align-items:center;gap:14px;font-size:30px;font-weight:500">${icon("chatgpt", 40)}ChatGPT<span style="flex:1"></span>
-        <span class="mm" style="font-size:30px;font-weight:500;color:var(--navy);background:var(--lime);padding:6px 20px;border-radius:999px">Mentioned · #2</span></div>
-      <div style="margin-top:22px;font-size:38px;line-height:1.42;color:var(--body);letter-spacing:-0.015em">
-        For a Series A launch, Northlight PR is a well-known name in tech media.
-        <span class="vp" style="position:relative;color:var(--navy);font-weight:500;white-space:nowrap"><span class="hb" style="position:absolute;left:-6px;right:-6px;top:4px;bottom:2px;background:var(--lime);border-radius:8px;transform-origin:left;transform:scaleX(0);z-index:-1"></span>Venture PR</span>
-        focuses on fast press results for startups and pairs launches with founder-led stories.</div>`;
-    ans.querySelector(".vp").parentElement.style.position = "relative";
-    ans.querySelector(".vp").parentElement.style.zIndex = "0";
-    const hb = ans.querySelector(".hb"), mm = ans.querySelector(".mm");
+    const arc = ring.querySelector(".arc"), pct = ring.querySelector(".pct"), hits = ring.querySelector(".hits");
+    const rk = rank.querySelector(".rk"), mn = ment.querySelector(".mn");
+    const tA = tHelps + 0.1, tU = P("understand");
+    sfx(tHelps - 0.12, "whoosh_light", -15);
+    bars.forEach((_, i) => sfx(tAcross + 0.05 + i * 0.1, "ui_select", -26));
     return (t) => {
-      S.update(t, 36.55, 41.3, { din: 0.45 });
-      focus(q, t, 36.75, null, { dy: 26, blur: 16 });
-      tiles.forEach((x, i) => {
-        focus(x.tl, t, 36.85 + i * 0.07, null, { dy: 40, scale: 0.92, blur: 14 });
-        const done = 37.35 + i * 0.19;
-        x.spin.style.transform = `rotate(${t * 480 + i * 40}deg)`;
-        x.spin.style.opacity = t < done ? 1 : 0;
-        const k = tw(t, done, done + 0.3, E.outBack);
-        x.ok.style.transform = `scale(${k})`;
-        x.tl.style.borderColor = t > done ? "rgba(184,255,60,0.5)" : "rgba(255,255,255,0.16)";
-      });
-      const a = tw(t, 38.6, 39.3, E.outQuint);
-      ans.style.opacity = a.toFixed(3);
-      blur(ans, 16 * (1 - a));
-      ans.style.transform = `perspective(2000px) translateY(${lerp(90, 0, a)}px) rotateX(${lerp(14, 0, a)}deg)`;
-      hb.style.transform = `scaleX(${tw(t, 39.6, 39.98, E.outExpo)})`;
-      focus(mm, t, 39.98, null, { dy: 0, scale: 0.85, blur: 8, din: 0.4 });
+      show(panel, t, tA - 0.1, tStart + 0.02, { dy: 60, scale: 0.97, din: 0.6, dout: 0.18, blurOut: 12, outScale: 1.03 });
+      panel.style.transform += ` scale(${lerp(1, 1.03, tw(t, tA, tStart, E.lin))})`;
+      [ring, rank, ment].forEach((c, i) => show(c, t, tA + 0.15 + i * 0.12, null, { dy: 26, din: 0.45 }));
+      const k = tw(t, tU, tU + 1.1, E.outQuint);
+      arc.setAttribute("stroke-dashoffset", (603 * (1 - 0.68 * k)).toFixed(1));
+      pct.textContent = Math.round(68 * k) + "%";
+      hits.textContent = Math.round(16 * k);
+      rk.textContent = t > tU + 0.9 ? "3" : t > tU + 0.45 ? "4" : "5";
+      mn.textContent = count(t, tU + 0.2, tU + 1.4, 0, 142);
+      show(row2, t, tAcross - 0.35, null, { dy: 30, din: 0.45 });
+      bars.forEach((b, i) => { const g = tw(t, tAcross + i * 0.1, tAcross + 0.6 + i * 0.1, E.outQuint); b.f.style.transform = `scaleX(${g * b.v / 100})`; b.vv.textContent = Math.round(b.v * g) + "%"; });
     };
   });
 
-  // ------------------------------------------------------------ B17 competitors + citations (40.95 - 47.25)
-  beat("front", 40.95, 47.25, (r) => {
-    const S = space(r);
-    const rail = $("div", "abs", S.stage);
-    css(rail, { left: 0, top: 0, width: `${W * 2}px`, height: `${H}px`, transformStyle: "preserve-3d" });
-    const A1 = $("div", "card abs", rail);
-    css(A1, { left: "260px", top: "120px", width: "1400px", padding: "38px 46px 30px" });
-    A1.innerHTML = `<div style="display:flex;align-items:baseline"><span style="font-size:52px;font-weight:300;letter-spacing:-0.04em">Who AI <span class="serif" style="font-size:1.12em">recommends</span></span><span style="flex:1"></span><span class="label">Share of answers</span></div>
-      <div class="rows" style="margin-top:18px"></div>`;
-    const C = [["N", "var(--c-n)", "Northlight PR", 54], ["V", "var(--c-v)", "Venture PR", 52, true], ["B", "var(--c-b)", "Brightwell", 46], ["C", "var(--c-c)", "Cedar & Pine", 33], ["M", "var(--c-m)", "Marlow Partners", 30]];
+  // ---------------- 8-9. website field over Ben -> split screen: questions -> engines -> mention
+  const tReview = P("and review");
+  const tChecks = SEG("Seekworthy checks").t0;
+  const tShows = P("and shows");
+  const tComp = SEG("competitors appear").t0;
+  key(tStart - 0.001, { show: 0 }, "step");
+  key(tStart, { z: 1.0 }, "step");
+  key(tReview - 0.02, { z: 1.03 }, "lin");
+  const SPLIT = { x: 56, y: 56, w: 640, h: 968, r: 26 };
+  key(tReview + 0.42, SPLIT, "inOutQuint");
+  key(tComp - 0.25, SPLIT, "lin");
+  key(tComp + 0.12, { x: -700, y: 56, w: 640, h: 968, r: 26, op: 0 }, "inCubic");
+  key(tComp + 0.13, { show: 0 }, "step");
+  beat("front", tStart, tReview + 0.5, (r) => {
+    const inp = inputPill(r, 1130, 70, 700);
+    const t0 = P("start with") + 0.05, tap = P("website", tStart) + 0.3;
+    sfx(tStart - 0.02, "whoosh_short", -22);
+    sfx(t0 + 0.05, "type", -21, { text: "closewise.com", dur: 0.6 });
+    sfx(tap, "ui_click", -12);
+    return (t) => { show(inp.wrap, t, tStart + 0.02, tReview + 0.3, { dy: -20, scale: 0.96 }); inp.update(t, "closewise.com", t0, t0 + 0.6, tap, "yourcompany.com"); };
+  });
+  beat("back", tReview - 0.05, tComp + 0.2, (r) => {
+    const c = canvas(r, "white");
+    return (t) => { c.style.opacity = tw(t, tReview - 0.05, tReview + 0.2).toFixed(3); };
+  });
+  beat("front", tReview, tComp + 0.25, (r) => {
+    const X = 790;
+    const line = $("div", "abs", r);
+    css(line, { left: `${X + 30}px`, top: "190px", width: "2px", height: "790px", background: "linear-gradient(#3f5efb, rgba(63,94,251,.08))", transformOrigin: "top" });
+    const head = $("div", "abs", r);
+    css(head, { left: `${X}px`, top: "100px", width: "1100px", height: "100px", overflow: "hidden" });
+    const steps = [["1", "Buyer questions", tReview], ["2", "Checking 6 AI engines", tChecks], ["3", "Where you're mentioned", tShows]].map(([n, txt, at]) => {
+      const p = $("div", "abs pill", head, `<span style="color:var(--blue);font-weight:500">${n}.</span><span>${txt}</span>`);
+      css(p, { left: 0, top: "6px", fontSize: "38px", color: "var(--ink)", letterSpacing: "-0.02em", border: "1.5px solid var(--line)", borderRadius: "16px", padding: "14px 26px", whiteSpace: "nowrap", background: "#fff", boxShadow: "0 8px 24px -14px rgba(15,27,76,.3)" });
+      return { p, at };
+    });
+    const Q = ["Best sales platform for a B2B startup?", "Closewise vs Revora", "Top AI tools for outbound SDR teams", "Which tool books the most meetings?", "Is Closewise good for small teams?"];
+    const qs = Q.map((q, i) => {
+      const e = $("div", "abs", r, q);
+      css(e, { left: `${X + 70}px`, top: `${250 + i * 106}px`, fontSize: "34px", color: "var(--ink)", border: "1.5px solid var(--line)", borderRadius: "16px", padding: "18px 26px", background: "#fff", whiteSpace: "nowrap" });
+      return e;
+    });
+    const qAt = (i) => P("questions", tReview) + i * 0.3;
+    Q.forEach((_, i) => sfx(qAt(i), "ui_select", -24));
+    const eng = ENG.map(([k, n], i) => {
+      const e = $("div", "abs", r);
+      css(e, { left: `${X + 70}px`, top: `${250 + i * 100}px`, width: "640px", height: "82px", display: "flex", alignItems: "center", gap: "20px", border: "1.5px solid var(--line)", borderRadius: "16px", padding: "0 24px", background: "#fff" });
+      e.innerHTML = `${icon(k, 40)}<span style="font-size:34px;color:var(--ink);flex:1">${n}</span>
+        <svg class="sp" width="34" height="34" viewBox="0 0 34 34"><circle cx="17" cy="17" r="14" stroke="#3f5efb" stroke-width="3.5" fill="none" stroke-dasharray="30 70" stroke-linecap="round"/></svg>
+        <span class="ok" style="width:40px;height:40px;border-radius:50%;background:var(--blue);display:none;align-items:center;justify-content:center"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+      return { e, sp: e.querySelector(".sp"), ok: e.querySelector(".ok") };
+    });
+    const eAt = (i) => tChecks + 0.15 + i * 0.07, eDone = (i) => P("those questions") + 0.1 + i * 0.16;
+    ENG.forEach((_, i) => sfx(eDone(i), "chime", -24 + i * 0.4, { pan: 0.2 }));
+    const ans = $("div", "abs card", r);
+    css(ans, { left: `${X + 70}px`, top: "250px", width: "980px", padding: "34px 38px" });
+    ans.innerHTML = `<div style="display:flex;align-items:center;gap:14px;font-size:28px;color:var(--muted)">${icon("chatgpt", 36)}ChatGPT<span style="flex:1"></span><span class="m4" style="font-size:26px;color:var(--ink);background:var(--lime);padding:6px 16px;border-radius:999px">Mentioned in 4 of 6 engines</span></div>
+      <div style="font-size:36px;line-height:1.45;color:var(--body);margin-top:20px;letter-spacing:-0.01em">For B2B startups, Revora is a common enterprise pick.
+      <span style="position:relative;z-index:0;color:var(--ink);font-weight:500;white-space:nowrap"><span class="hb" style="position:absolute;left:-6px;right:-6px;top:6px;bottom:2px;background:var(--lime);border-radius:6px;z-index:-1;transform-origin:left;transform:scaleX(0)"></span>Closewise</span>
+      stands out for fast setup and automated follow-ups.</div>`;
+    const hb = ans.querySelector(".hb"), m4 = ans.querySelector(".m4");
+    sfx(tShows + 0.05, "whoosh_short", -22);
+    sfx(P("mentioned") + 0.05, "shimmer_coin", -16);
+    sfx(P("mentioned") + 0.35, "notify", -20);
+    return (t) => {
+      line.style.transform = `scaleY(${tw(t, tReview + 0.2, tReview + 0.9, E.outCubic)})`;
+      steps.forEach((s, i) => {
+        const nx = steps[i + 1];
+        const inn = tw(t, s.at - 0.05, s.at + 0.3, E.outExpo), out = nx ? tw(t, nx.at - 0.05, nx.at + 0.25, E.inOutCubic) : 0;
+        s.p.style.transform = `translateY(${(1 - inn) * 90 - out * 90}px)`;
+        s.p.style.opacity = (inn * (1 - out)).toFixed(3);
+      });
+      qs.forEach((e, i) => show(e, t, qAt(i), tChecks + 0.05 + i * 0.03, { dx: 30, dy: 0, din: 0.35, dout: 0.2 }));
+      eng.forEach((x, i) => {
+        show(x.e, t, eAt(i), tShows + 0.02 + i * 0.02, { dx: 30, dy: 0, din: 0.35, dout: 0.2 });
+        const done = t > eDone(i);
+        x.sp.style.display = done ? "none" : "block";
+        x.sp.style.transform = `rotate(${t * 540 + i * 50}deg)`;
+        x.ok.style.display = done ? "flex" : "none";
+        x.ok.style.transform = `scale(${tw(t, eDone(i), eDone(i) + 0.25, E.outBack)})`;
+      });
+      show(ans, t, tShows + 0.08, tComp + 0.15, { dy: 30, din: 0.45 });
+      hb.style.transform = `scaleX(${tw(t, P("mentioned") - 0.05, P("mentioned") + 0.3, E.outExpo)})`;
+      show(m4, t, P("mentioned") + 0.3, null, { dy: 0, scale: 0.85, din: 0.35, e: E.outBack });
+      r.style.opacity = (1 - tw(t, tComp - 0.05, tComp + 0.2)).toFixed(3);
+    };
+  });
+
+  // ---------------- 10. competitors + sources on the flat brand canvas
+  const tSources = P("which sources");
+  const tBeyond = SEG("go beyond").t0;
+  beat("back", tComp - 0.12, tBeyond + 0.02, (r) => { const c = canvas(r, "blue"); return (t) => { c.style.opacity = tw(t, tComp - 0.12, tComp + 0.1).toFixed(3); }; });
+  beat("front", tComp - 0.05, tBeyond + 0.02, (r) => {
+    const card = $("div", "abs card", r);
+    css(card, { left: "410px", top: "150px", width: "1100px", padding: "36px 42px 26px", boxShadow: "0 0 0 10px rgba(255,255,255,.18), 0 40px 90px -30px rgba(10,20,90,.55)" });
+    card.innerHTML = `<div style="display:flex;align-items:baseline"><span style="font-size:24px;letter-spacing:.12em;color:var(--blue)">COMPETITORS</span><span style="flex:1"></span><span style="font-size:26px;color:var(--muted)">share of AI answers</span></div>
+      <div style="font-size:48px;color:var(--ink);letter-spacing:-0.03em;margin-top:8px">Who AI recommends instead</div><div class="rows" style="margin-top:18px"></div>`;
+    const C = [["R", "#d6608a", "Revora", 54], ["C", "#2b3560", "Closewise", 49, true], ["L", "#2aa5b0", "Leadsmith", 41], ["P", "#e0913a", "Pipeworks", 33], ["S", "#8b5cf6", "Salesgrid", 27]];
     const crow = C.map(([l, c, n, v, you], i) => {
-      const row = $("div", "", A1.querySelector(".rows"));
-      css(row, { display: "flex", alignItems: "center", gap: "22px", height: "100px", padding: "0 22px", borderRadius: "18px", borderTop: i ? "1.5px solid var(--line-soft)" : "none", background: you ? "rgba(184,255,60,0.16)" : "transparent" });
-      row.innerHTML = `<span style="width:36px;font-size:32px;color:var(--faint)">${i + 1}</span>${fav(l, c, 50)}
-        <span style="width:360px;font-size:38px;font-weight:${you ? 500 : 400};letter-spacing:-0.02em">${n}${you ? ' <span style="font-size:26px;font-weight:500;background:var(--lime);color:var(--navy);padding:3px 12px;border-radius:999px;vertical-align:middle">You</span>' : ""}</span>
-        <span style="flex:1;height:12px;border-radius:6px;background:#eef0f5;overflow:hidden"><span class="b" style="display:block;height:100%;border-radius:6px;background:${you ? "linear-gradient(90deg,#002afe,#00baff)" : "#c3c9de"};transform-origin:left"></span></span>
-        <span class="pv" style="width:100px;text-align:right;font-size:42px;font-weight:300;letter-spacing:-0.03em"></span>`;
+      const row = $("div", "", card.querySelector(".rows"));
+      css(row, { display: "flex", alignItems: "center", gap: "20px", height: "88px", padding: "0 18px", borderRadius: "16px", background: you ? "rgba(184,255,60,.22)" : "transparent", borderTop: i && !you ? "1.5px solid var(--line)" : "none" });
+      row.innerHTML = `<span style="width:28px;font-size:28px;color:var(--faint)">${i + 1}</span>${fav(l, c, 46)}
+        <span style="width:300px;font-size:34px;letter-spacing:-0.02em;color:var(--ink)">${n}${you ? ' <span style="font-size:22px;background:var(--lime);padding:3px 10px;border-radius:999px;vertical-align:middle">You</span>' : ""}</span>
+        <span style="flex:1;height:12px;border-radius:6px;background:#eef1f8;overflow:hidden"><span class="b" style="display:block;height:12px;border-radius:6px;background:${you ? "linear-gradient(90deg,#3f5efb,#5fd0ff)" : "#c3cae0"};transform-origin:left;transform:scaleX(0)"></span></span>
+        <span class="pv" style="width:84px;text-align:right;font-size:34px;color:var(--ink)"></span>`;
       return { row, v, b: row.querySelector(".b"), pv: row.querySelector(".pv") };
     });
-    const B1 = $("div", "card abs", rail);
-    css(B1, { left: `${W + 260}px`, top: "120px", width: "1400px", padding: "38px 46px 36px" });
-    B1.innerHTML = `<div style="display:flex;align-items:baseline"><span style="font-size:52px;font-weight:300;letter-spacing:-0.04em">Where AI <span class="serif" style="font-size:1.12em">finds you</span></span><span style="flex:1"></span><span class="label">Citations</span></div>
-      <div style="display:flex;align-items:baseline;gap:16px;margin-top:10px"><span class="n23" style="font-size:132px;font-weight:300;letter-spacing:-0.05em;line-height:1"></span><span style="font-size:36px;color:var(--muted)">sources cited</span></div>
-      <div class="stack" style="display:flex;height:22px;border-radius:11px;overflow:hidden;margin-top:18px;background:#eef0f5;gap:4px"></div>
-      <div class="legend" style="display:flex;gap:40px;margin-top:18px;font-size:30px;color:var(--body)"></div>
-      <div class="doms" style="margin-top:20px"></div>`;
-    const SEG = [["Reviews", 43, "#0f1b4c"], ["Social", 24, "#002afe"], ["News", 20, "#00baff"], ["Other", 13, "#c9d2ff"]];
-    const segs = SEG.map(([n, v, c]) => {
-      const s = $("span", "", B1.querySelector(".stack"));
-      css(s, { width: `${v}%`, background: c, transformOrigin: "left", display: "block", borderRadius: "11px" });
-      B1.querySelector(".legend").insertAdjacentHTML("beforeend", `<span style="display:flex;align-items:center;gap:10px"><span style="width:16px;height:16px;border-radius:50%;background:${c}"></span>${n} ${v}%</span>`);
-      return s;
-    });
-    const D = [["in", "#0a66c2", "linkedin.com", "Social", 38], ["T", "#0f9d58", "techcrunch.com", "News", 31], ["C", "#ff3d2e", "clutch.co", "Reviews", 27]];
+    const card2 = $("div", "abs card", r);
+    css(card2, { left: "410px", top: "150px", width: "1100px", padding: "36px 42px 30px", boxShadow: "0 0 0 10px rgba(255,255,255,.18), 0 40px 90px -30px rgba(10,20,90,.55)" });
+    card2.innerHTML = `<div style="display:flex;align-items:baseline"><span style="font-size:24px;letter-spacing:.12em;color:var(--blue)">SOURCES</span><span style="flex:1"></span><span style="font-size:26px;color:var(--muted)">cited in answers about you</span></div>
+      <div style="font-size:48px;color:var(--ink);letter-spacing:-0.03em;margin-top:8px">Where AI gets its answers</div>
+      <div class="stack" style="display:flex;gap:5px;height:18px;margin-top:22px"></div><div class="doms" style="margin-top:14px"></div>`;
+    const D = [["G2", "#ff492c", "g2.com", "Reviews", 38], ["r", "#ff4500", "reddit.com", "Community", 24], ["in", "#0a66c2", "linkedin.com", "Social", 19], ["C", "#ff9d28", "capterra.com", "Reviews", 12]];
+    const segs = D.map(([, c, , , v]) => { const s = $("span", "", card2.querySelector(".stack")); css(s, { width: `${v / 0.93}%`, background: c, borderRadius: "9px", transformOrigin: "left", display: "block" }); return s; });
     const drow = D.map(([l, c, d, ty, v]) => {
-      const row = $("div", "", B1.querySelector(".doms"));
-      css(row, { display: "flex", alignItems: "center", gap: "20px", height: "86px", borderTop: "1.5px solid var(--line-soft)" });
-      row.innerHTML = `${fav(l, c, 46)}<span style="flex:1;font-size:36px;letter-spacing:-0.015em">${d}</span>
-        <span style="font-size:28px;color:var(--muted);border:1.5px solid var(--line);padding:4px 16px;border-radius:999px">${ty}</span>
-        <span style="width:120px;text-align:right;font-size:40px;font-weight:300;letter-spacing:-0.03em">${v}%</span>`;
+      const row = $("div", "", card2.querySelector(".doms"));
+      css(row, { display: "flex", alignItems: "center", gap: "18px", height: "84px", borderTop: "1.5px solid var(--line)" });
+      row.innerHTML = `${fav(l, c, 44, 10)}<span style="flex:1;font-size:34px;color:var(--ink)">${d}</span><span style="font-size:26px;color:var(--muted);border:1.5px solid var(--line);padding:4px 14px;border-radius:999px">${ty}</span><span style="width:100px;text-align:right;font-size:34px;color:var(--ink)">${v}%</span>`;
       return row;
     });
-    const n23 = B1.querySelector(".n23");
+    const tWC = P("which competitors");
+    sfx(tComp - 0.02, "woosh_slide", -13);
+    C.forEach((_, i) => sfx(tWC + 0.1 + i * 0.09, "ui_select", -26));
+    sfx(tSources - 0.12, "whoosh_light", -14);
+    D.forEach((_, i) => sfx(tSources + 0.4 + i * 0.14, "ui_select", -26));
     return (t) => {
-      S.update(t, 41.0, 47.2, { din: 0.45 });
-      const a = tw(t, 41.05, 41.9, E.outQuint);
-      const pan = tw(t, 44.1, 44.85, E.inOutQuint);
-      rail.style.transform = `translateX(${-W * pan}px) translateZ(${-260 * Math.sin(Math.PI * pan)}px) rotateY(${-6 * Math.sin(Math.PI * pan)}deg)`;
-      A1.style.opacity = (a * (1 - 0.7 * pan)).toFixed(3);
-      A1.style.transform = `translateZ(${lerp(-300, 0, a)}px) rotateX(${lerp(14, 2, a)}deg) rotateY(${lerp(-10, -2, a)}deg)`;
-      blur(A1, 16 * (1 - a));
+      const swap = tw(t, tSources - 0.15, tSources + 0.3, E.inOutQuint);
+      const a = tw(t, tComp, tComp + 0.5, E.outExpo);
+      card.style.opacity = (a * (1 - swap)).toFixed(3);
+      card.style.transform = `translateY(${(1 - a) * 70 - swap * 140}px) scale(${lerp(0.95, 1, a) * lerp(1, 0.94, swap)})`;
+      blur(card, 10 * (1 - a) + 8 * swap);
       crow.forEach((c, i) => {
-        focus(c.row, t, 41.72 + i * 0.1, null, { dy: 24, blur: 10, din: 0.45 });
-        const f = tw(t, 41.85 + i * 0.1, 42.7 + i * 0.1, E.outQuint);
+        show(c.row, t, tWC + i * 0.09, null, { dy: 18, din: 0.35 });
+        const f = tw(t, tWC + 0.1 + i * 0.09, tWC + 0.8 + i * 0.09, E.outQuint);
         c.b.style.transform = `scaleX(${f * c.v / 60})`;
         c.pv.textContent = Math.round(c.v * f) + "%";
       });
-      B1.style.transform = `rotateY(${lerp(8, 2, pan)}deg) rotateX(${lerp(6, 2, pan)}deg) scale(${lerp(1, 1.025, tw(t, 44.8, 47.2, E.inOutCubic))})`;
-      n23.textContent = count(t, 44.45, 45.1, 23);
-      segs.forEach((s, i) => { s.style.transform = `scaleX(${tw(t, 44.6 + i * 0.1, 45.05 + i * 0.1, E.outQuint)})`; });
-      drow.forEach((d, i) => focus(d, t, 45.3 + i * 0.16, null, { dy: 22, blur: 10, din: 0.45 }));
+      const b2 = tw(t, tSources - 0.05, tSources + 0.45, E.outExpo);
+      card2.style.opacity = (b2 * (1 - tw(t, tBeyond - 0.2, tBeyond))).toFixed(3);
+      card2.style.transform = `translateY(${(1 - b2) * 160}px) scale(${lerp(0.96, 1, b2)})`;
+      blur(card2, 10 * (1 - b2));
+      segs.forEach((s, i) => { s.style.transform = `scaleX(${tw(t, tSources + 0.2 + i * 0.08, tSources + 0.6 + i * 0.08, E.outQuint)})`; });
+      drow.forEach((d, i) => show(d, t, tSources + 0.4 + i * 0.14, null, { dy: 16, din: 0.35 }));
     };
   });
 
-  // ------------------------------------------------------------ B19 / B20 (47.17 - 52.73)
-  beat("back", 47.1, 50.95, (r) => {
-    const a = kinetic(r, [[["Not", 47.72], ["one", 48.45]], [["check.", 48.92, "serif grad"]]], { x: 100, y: 140, size: 150 });
-    const b = kinetic(r, [[["The", 50.02], ["whole", 50.18]], [["story.", 50.28, "serif grad"]]], { x: 100, y: 140, size: 150 });
-    return (t) => { a.update(t, 50.0); b.update(t, 50.85); };
-  });
-  beat("back", 50.8, 52.8, (r) => {
-    const k = kinetic(r, [[["Check.", 51.28]], [["Fix", 51.64], ["the", 51.82]], [["gaps.", 52.0, "serif grad"]]], { x: 100, y: 110, size: 150 });
-    return (t) => k.update(t, 52.75);
+  // ---------------- 11-12. beyond one check / fix the gaps (with a close-up)
+  const tGot = SEG("check and fix").t0;
+  const tCorrect = SEG("correct an").t0;
+  key(tBeyond - 0.001, { show: 0 }, "step");
+  key(tBeyond, { z: 1.0 }, "step");
+  key(tGot - 0.001, { z: 1.05 }, "lin");
+  key(tGot, { z: 1.26, ay: 0.29 }, "step");
+  key(tCorrect - 0.001, { z: 1.29, ay: 0.29 }, "lin");
+  beat("front", tBeyond, tCorrect + 0.05, (r) => {
+    const a = say(r, ["So you can go beyond", "checking your name once"], { x: 110, y: 96, after: tBeyond - 0.1, out: P("and hoping") - 0.02 });
+    const b = say(r, ["and hoping that tells", "the *whole story.*"], { x: 1810, y: 800, align: "right", after: P("and hoping") - 0.1, out: tGot + 0.02 });
+    const c = say(r, ["You've got to check", "and *fix the gaps.*"], { x: 1810, y: 800, align: "right", after: tGot - 0.1, out: tCorrect + 0.02 });
+    sfx(tBeyond - 0.03, "whoosh_short", -22);
+    sfx(tGot - 0.03, "woosh_quick", -20);
+    return (t) => { a.update(t); b.update(t); c.update(t); };
   });
 
-  // ------------------------------------------------------------ B21 next actions (52.73 - 58.67)
-  beat("front", 52.7, 58.95, (r) => {
-    const card = $("div", "card abs", r);
-    css(card, { left: "100px", top: "150px", width: "760px", padding: "40px 42px 28px" });
-    card.innerHTML = `<div style="font-size:30px;color:var(--muted)">Next actions</div>
-      <div style="font-size:60px;font-weight:300;letter-spacing:-0.045em;margin-top:4px">Close the <span class="serif" style="font-size:1.12em">gaps</span></div><div class="ls" style="margin-top:16px"></div>`;
-    const items = [["Correct an inaccurate description", 52.81], ["Improve a page", 54.46], ["Answer a missing question", 55.45], ["Check again", 57.88]].map(([txt, at]) => {
-      const row = $("div", "", card.querySelector(".ls"));
-      css(row, { display: "flex", alignItems: "center", gap: "22px", height: "98px", borderTop: "1.5px solid var(--line-soft)" });
-      row.innerHTML = `<span class="bx" style="width:50px;height:50px;border-radius:50%;border:2.5px solid #c9cedb;display:flex;align-items:center;justify-content:center;flex:none">
-        <svg class="ck" width="28" height="28" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#0f1b4c" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        <span class="tx" style="font-size:36px;letter-spacing:-0.015em">${txt}</span>`;
-      return { row, at, bx: row.querySelector(".bx"), ck: row.querySelector(".ck"), tx: row.querySelector(".tx") };
+  // ---------------- 13. action plan: glass over blurred footage -> report card on the brand canvas
+  const tChanged = P("what's changed") - 0.05;
+  const tPromise = SEG("no one can").t0;
+  key(tCorrect, { z: 1.0, blur: 0 }, "step");
+  key(tCorrect + 0.35, { z: 1.06, blur: 26, dim: 0.06 }, "inOutCubic");
+  key(tChanged - 0.02, { z: 1.08, blur: 26, dim: 0.06 }, "lin");
+  key(tChanged + 0.2, { z: 1.1, blur: 40, dim: 0.2 }, "inCubic");
+  key(tChanged + 0.21, { show: 0 }, "step");
+  beat("back", tCorrect, tChanged + 0.25, (r) => {
+    const g = canvas(r, "grad");
+    g.classList.remove("ribs");
+    return (t) => { g.style.opacity = (0.5 * tw(t, tCorrect, tCorrect + 0.4)).toFixed(3); };
+  });
+  beat("front", tCorrect - 0.05, tChanged + 0.3, (r) => {
+    const panel = $("div", "abs gl glass", r);
+    css(panel, { left: "330px", top: "120px", width: "1260px", padding: "30px 30px 22px", borderRadius: "30px", background: "rgba(255,255,255,0.3)" });
+    panel.innerHTML = `<div style="font-size:26px;letter-spacing:.12em;color:var(--ink);padding:0 8px 18px">ACTION PLAN · FIX, IMPROVE, CREATE, RE-CHECK</div><div class="ls" style="display:flex;flex-direction:column;gap:14px"></div>`;
+    const items = [
+      ["FIX", "#d6334a", "#fdecef", "Correct an inaccurate description", "ChatGPT says Closewise has no free plan", "Update", P("correct")],
+      ["IMPROVE", "#2743c9", "#e8edff", "Improve your pricing page", "Cited by 3 engines · last updated 2023", "Edit page", P("improve")],
+      ["CREATE", "#1d8a5f", "#e3f6ec", "Answer a question you're missing", "“Best tool for automated follow-ups?”", "Draft", P("create")],
+      ["RE-CHECK", "#6b7394", "#eef1f8", "Check again", "Weekly re-check on 24 buyer questions", "Run", P("and check again")],
+    ].map(([tag, c, bg, title, sub, btn, at]) => {
+      const row = $("div", "card", panel.querySelector(".ls"));
+      css(row, { display: "flex", alignItems: "center", gap: "22px", padding: "20px 24px", borderRadius: "18px" });
+      row.innerHTML = `<div style="flex:1"><div style="display:flex;align-items:center;gap:14px"><span class="tag" style="color:${c};background:${bg}">${tag}</span><span style="font-size:34px;color:var(--ink);letter-spacing:-0.015em">${title}</span></div>
+        <div style="font-size:26px;color:var(--muted);margin-top:8px">${sub}</div></div><span class="btn" style="font-size:28px;padding:14px 22px">${btn}</span>`;
+      return { row, at, btn: row.querySelector(".btn") };
     });
+    items.forEach((it) => { sfx(it.at - 0.02, "whoosh_short", -25); sfx(it.at + 0.55, "ui_click", -16); });
+    sfx(tCorrect - 0.05, "whoosh_light", -16);
     return (t) => {
-      focus(card, t, 52.76, 58.86, { dy: 40, dx: -40, scale: 0.96, blur: 18 });
-      items.forEach((it, i) => {
-        focus(it.row, t, it.at, null, { dy: 22, blur: 12, din: 0.45 });
-        const done = it.at + (i === 3 ? 0.6 : 0.5);
-        const k = tw(t, done, done + 0.25, E.outBack);
-        it.bx.style.background = k > 0.05 ? "var(--lime)" : "#fff";
-        it.bx.style.borderColor = k > 0.05 ? "var(--lime)" : "#c9cedb";
-        it.ck.style.transform = `scale(${k})`;
-        it.tx.style.color = k > 0.5 && i < 3 ? "var(--muted)" : "var(--ink)";
+      show(panel, t, tCorrect, tChanged + 0.1, { dy: 50, scale: 0.97, din: 0.5, dout: 0.2, blurOut: 12, outScale: 1.04 });
+      items.forEach((it) => {
+        show(it.row, t, it.at - 0.05, null, { dy: 26, din: 0.4 });
+        const k = Math.sin(Math.PI * clamp((t - it.at - 0.55) / 0.25));
+        it.btn.style.transform = `scale(${1 - 0.08 * k})`;
+        it.btn.style.background = t > it.at + 0.55 && t < it.at + 0.95 ? "var(--blue-deep)" : "var(--blue)";
       });
     };
   });
-
-  // ------------------------------------------------------------ B22 visibility up (58.6 - 60.45)
-  beat("front", 58.6, 60.45, (r) => {
-    const S = space(r);
-    const ttl = $("div", "abs", S.stage, `Venture PR's visibility<br>is <span class="serif grad" style="font-size:1.12em">up 5 points</span>`);
-    css(ttl, { left: "200px", top: "150px", fontSize: "84px", fontWeight: 300, letterSpacing: "-0.045em", width: "1100px", lineHeight: "1.04" });
-    const big = $("div", "abs", S.stage, `<span class="v" style="font-size:240px;font-weight:200;letter-spacing:-0.06em;line-height:1"></span>`);
-    css(big, { left: "1330px", top: "120px" });
-    const v = big.querySelector(".v");
-    const sv = $("div", "abs", S.stage, `<svg width="1520" height="420" viewBox="0 0 1520 420" style="overflow:visible">
-      <defs><linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b8ff3c" stop-opacity=".25"/><stop offset="1" stop-color="#b8ff3c" stop-opacity="0"/></linearGradient>
-        <filter id="gl"><feGaussianBlur stdDeviation="8"/></filter></defs>
-      <path class="ar" fill="url(#g2)"/><path class="lg" fill="none" stroke="#b8ff3c" stroke-width="14" stroke-linecap="round" filter="url(#gl)" opacity=".55"/>
-      <path class="ln" fill="none" stroke="#b8ff3c" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-      <circle class="dt" r="14" fill="#b8ff3c"/></svg>`);
-    css(sv, { left: "200px", top: "480px" });
-    const pts = [47, 47.5, 47.2, 48.1, 48.0, 48.9, 49.4, 49.1, 50.2, 50.8, 50.6, 51.4, 52];
-    const xy = pts.map((p, i) => [i * (1520 / 12), 380 - (p - 46) * 52]);
-    const d = "M" + xy.map((p) => p.join(",")).join(" L");
-    const ln = sv.querySelector(".ln"), lg = sv.querySelector(".lg"), ar = sv.querySelector(".ar"), dt = sv.querySelector(".dt");
-    ln.setAttribute("d", d); lg.setAttribute("d", d); ar.setAttribute("d", d + " L1520,420 L0,420 Z");
-    ln.style.strokeDasharray = lg.style.strokeDasharray = "2400";
+  beat("back", tChanged + 0.05, tPromise + 0.02, (r) => { const c = canvas(r, "blue"); return (t) => { c.style.opacity = tw(t, tChanged + 0.05, tChanged + 0.22).toFixed(3); }; });
+  beat("front", tChanged + 0.08, tPromise + 0.02, (r) => {
+    const card = $("div", "abs card", r);
+    css(card, { left: "470px", top: "360px", width: "980px", padding: "34px 40px", display: "flex", gap: "40px", alignItems: "center", boxShadow: "0 0 0 10px rgba(255,255,255,.18), 0 40px 90px -30px rgba(10,20,90,.55)" });
+    card.innerHTML = `<svg width="200" height="200" viewBox="0 0 200 200"><circle cx="100" cy="100" r="82" stroke="#e8ecf6" stroke-width="16" fill="none"/>
+      <circle class="arc" cx="100" cy="100" r="82" stroke="#3f5efb" stroke-width="16" fill="none" stroke-linecap="round" stroke-dasharray="515" stroke-dashoffset="515" transform="rotate(-90 100 100)"/>
+      <text class="pct" x="100" y="116" text-anchor="middle" font-size="50" font-family="Inter Tight" fill="#0f1b4c" letter-spacing="-2">63%</text></svg>
+      <div><div style="font-size:22px;letter-spacing:.12em;color:var(--blue)">VISIBILITY · CLOSEWISE</div>
+      <div style="font-size:46px;color:var(--ink);letter-spacing:-0.03em;margin-top:8px">Up <span class="up">0</span> points since your fixes</div>
+      <div style="display:flex;gap:12px;margin-top:20px;font-size:24px;color:var(--muted)"><span style="border:1.5px solid var(--line);border-radius:999px;padding:4px 14px">24 questions</span><span style="border:1.5px solid var(--line);border-radius:999px;padding:4px 14px">6 engines</span><span style="border:1.5px solid var(--line);border-radius:999px;padding:4px 14px">3 fixes shipped</span></div></div>`;
+    const arc = card.querySelector(".arc"), pct = card.querySelector(".pct"), up = card.querySelector(".up");
+    sfx(tChanged + 0.06, "woosh_slide", -14);
+    sfx(tChanged + 0.35, "shimmer_coin", -18);
     return (t) => {
-      S.update(t, 58.65, 60.4, { din: 0.4 });
-      focus(ttl, t, 58.8, null, { dy: 30, blur: 18 });
-      focus(big, t, 58.95, null, { dy: 30, blur: 18 });
-      const k = tw(t, 58.85, 59.8, E.inOutCubic);
-      v.textContent = Math.round(lerp(47, 52, k));
-      ln.style.strokeDashoffset = lg.style.strokeDashoffset = `${2400 * (1 - k)}`;
-      ar.style.opacity = tw(t, 59.75, 60.15).toFixed(3);
-      const seg = Math.min(11.999, k * 12), i = Math.floor(seg), f = seg - i;
-      dt.setAttribute("cx", lerp(xy[i][0], xy[i + 1][0], f));
-      dt.setAttribute("cy", lerp(xy[i][1], xy[i + 1][1], f));
+      show(card, t, tChanged + 0.1, tPromise + 0.02, { dy: 40, scale: 0.95, din: 0.45, dout: 0.15 });
+      const k = tw(t, tChanged + 0.3, tChanged + 1.0, E.outQuint);
+      const v = lerp(63, 68, k);
+      arc.setAttribute("stroke-dashoffset", (515 * (1 - v / 100)).toFixed(1));
+      pct.textContent = Math.round(v) + "%";
+      up.textContent = Math.round(5 * k);
     };
   });
 
-  // ------------------------------------------------------------ B24 stop guessing / B25 URL (63.2 - 68.12)
-  beat("back", 63.2, 66.5, (r) => {
-    const a = kinetic(r, [[["Stop", 63.82]], [["guessing.", 64.04, "serif"]]], { x: 100, y: 140, size: 150 });
-    const b = kinetic(r, [[["Start", 64.92]], [["working", 65.12], ["from", 65.4]], [["evidence.", 65.62, "serif grad"]]], { x: 100, y: 120, size: 110 });
-    return (t) => { a.update(t, 64.9); b.update(t, 66.4); };
-  });
-  beat("back", 66.4, 68.2, (r) => {
-    const u = $("div", "abs", r);
-    css(u, { left: "100px", top: "200px", fontSize: "112px", fontWeight: 300, letterSpacing: "-0.045em", textShadow: "0 0 80px rgba(5,10,34,0.35)" });
-    return (t) => {
-      const s = typed("seekworthy.ai", t, 66.72, 67.3);
-      const dot = s.indexOf(".");
-      u.innerHTML = (dot >= 0 ? s.slice(0, dot) + `<span class="serif grad" style="font-size:1.1em">${s.slice(dot)}</span>` : s) +
-        `<span style="display:inline-block;width:5px;height:104px;margin-left:10px;vertical-align:-14px;background:var(--lime);opacity:${t < 67.3 || caretOn(t) ? 1 : 0}"></span>`;
-      const q = tw(t, 67.8, 68.12, E.inCubic);
-      u.style.opacity = (tw(t, 66.5, 66.75) * (1 - q)).toFixed(3);
-      blur(u, 14 * q);
+  // ---------------- 14-15. no one can promise (close) / stop guessing, start with evidence (glass stat chips)
+  const tPoint = SEG("stop guessing").t0;
+  const tGo = SEG("go to seekworthy").t0;
+  key(tPromise - 0.001, { show: 0 }, "step");
+  key(tPromise, { z: 1.2, ay: 0.3 }, "step");
+  key(tPoint - 0.001, { z: 1.25, ay: 0.3 }, "lin");
+  key(tPoint, { z: 1.0 }, "step");
+  key(tGo - 0.001, { z: 1.04 }, "lin");
+  beat("front", tPromise, tGo + 0.05, (r) => {
+    const a = say(r, ["No one can promise you", "a place in every AI answer."], { x: 1810, y: 800, align: "right", after: tPromise - 0.1, out: tPoint + 0.02 });
+    const chip = (x, y, top, bottom) => {
+      const c = $("div", "abs gd glass", r, `<div style="font-size:66px;color:var(--lime);letter-spacing:-0.03em;line-height:1.05">${top}</div><div style="font-size:66px;color:#fff;letter-spacing:-0.03em;line-height:1.05">${bottom}</div>`);
+      css(c, { left: `${x}px`, top: `${y}px`, padding: "22px 34px 26px", borderRadius: "18px" });
+      return c;
     };
-  });
-  // ------------------------------------------------------------ B26/27 free check (68.12 - 71.6)
-  beat("front", 68.05, 71.7, (r) => {
-    const u = websiteCard(r, 100, 230, "yourbrand.com", 68.32, 70.02);
-    const chip = $("div", "abs", r, `<span style="width:12px;height:12px;border-radius:50%;background:var(--lime)"></span><span>Free plan · No card required</span>`);
-    css(chip, { left: "100px", top: "640px", display: "flex", alignItems: "center", gap: "14px", border: "1.5px solid rgba(255,255,255,0.45)", background: "rgba(5,10,34,0.45)", color: "#fff", fontSize: "34px", fontWeight: 400, padding: "16px 30px", borderRadius: "999px" });
-    return (t) => { u(t, 68.15, 71.55); focus(chip, t, 70.62, 71.55, { dy: 24, blur: 12 }); };
-  });
-  // ------------------------------------------------------------ B28 (71.6 - 74.9)
-  beat("back", 71.55, 75.0, (r) => {
-    const k = kinetic(r, [[["Is", 71.7], ["AI", 72.32]], [["recommending", 73.16]], [["your", 73.54, "serif"], ["business?", 73.86, "serif grad"]]], { x: 100, y: 130, size: 98 });
-    return (t) => k.update(t, 74.9);
-  });
-
-  // ------------------------------------------------------------ B29 end card (74.55 - end)
-  beat("front", 74.5, 99, (r) => {
-    const S = space(r);
-    const lock = $("div", "abs", S.stage, `<img src="${MARK}" style="width:104px;height:97px"><span>Seekworthy</span>`);
-    css(lock, { left: 0, width: `${W}px`, top: "170px", display: "flex", justifyContent: "center", alignItems: "center", gap: "24px", fontFamily: "Geist", fontSize: "84px", fontWeight: 600, letterSpacing: "-0.045em" });
-    const hd = $("div", "abs", S.stage, `Find out whether AI is recommending<br><span class="serif grad" style="font-size:1.14em">your business.</span>`);
-    css(hd, { left: 0, width: `${W}px`, top: "360px", textAlign: "center", fontSize: "88px", fontWeight: 300, letterSpacing: "-0.045em", lineHeight: "1.08" });
-    const url = $("div", "abs", S.stage, `<span style="border:1.5px solid rgba(255,255,255,.5);padding:18px 46px;border-radius:999px">seekworthy.ai</span>`);
-    css(url, { left: 0, width: `${W}px`, top: "640px", textAlign: "center", fontSize: "48px", fontWeight: 400, letterSpacing: "-0.02em" });
-    const sub = $("div", "abs", S.stage, "Start with a free check · No card needed");
-    css(sub, { left: 0, width: `${W}px`, top: "760px", textAlign: "center", fontSize: "32px", color: "var(--mist)" });
-    const ic = $("div", "abs", S.stage);
-    css(ic, { left: 0, width: `${W}px`, top: "850px", display: "flex", justifyContent: "center", gap: "24px" });
-    const icons = ENG.map(([k]) => { const s = $("span", "", ic, icon(k, 38)); css(s, { width: "72px", height: "72px", borderRadius: "50%", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }); return s; });
+    const c1 = chip(130, 360, "Stop", "guessing");
+    const c2 = chip(1330, 600, "Start with", "evidence");
+    sfx(P("stop") - 0.05, "whoosh_short", -20);
+    sfx(P("start working") - 0.05, "whoosh_short", -20);
     return (t) => {
-      S.update(t, 74.55, null, { din: 0.5 });
-      focus(lock, t, 74.9, null, { dy: 20, blur: 22, din: 0.7 });
-      focus(hd, t, 75.15, null, { dy: 30, blur: 22, din: 0.7 });
-      focus(url, t, 75.45, null, { dy: 20, blur: 16 });
-      focus(sub, t, 75.6, null, { dy: 16, blur: 12 });
-      icons.forEach((s, i) => focus(s, t, 75.7 + i * 0.06, null, { dy: 16, scale: 0.8, blur: 10 }));
-      S.stage.style.transform = `scale(${lerp(1, 1.025, tw(t, 74.9, 77.3, E.lin))})`;
+      a.update(t);
+      show(c1, t, P("stop") - 0.05, tGo + 0.02, { dy: 20, scale: 0.92, din: 0.4 });
+      show(c2, t, P("start working") - 0.05, tGo + 0.02, { dy: 20, scale: 0.92, din: 0.4 });
     };
   });
 
-  // ------------------------------------------------------------ captions: small, quiet, word by word (as in the reference)
-  const capWrap = $("div", "", FRONT);
-  capWrap.id = "captions";
-  const cap = $("div", "", capWrap);
-  cap.id = "cap";
-  const CAP_OFF = [[25.6, 27.0], [74.6, 99]];
-  const W8 = window.WORDS;
+  // ---------------- 16-18. go to seekworthy.ai / enter your website / no card / find out
+  const tFind = SEG("find out").t0;
+  const tEnd = SEG("GAP end").t0;
+  beat("front", tGo, tEnd + 0.05, (r) => {
+    const tEnter = SEG("enter your website").t0;
+    const a = say(r, ["Go to *seekworthy.ai.*"], { x: 110, y: 880, after: tGo - 0.1, out: tEnter + 0.02 });
+    const inp = inputPill(r, 1130, 70, 700);
+    const no = $("div", "abs gd glass pill", r, `<svg width="28" height="28" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#b8ff3c" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><span>No card needed</span>`);
+    css(no, { right: "110px", top: "214px", padding: "16px 26px", fontSize: "32px", color: "#fff", borderRadius: "16px" });
+    const b = say(r, ["Find out whether AI", "is recommending", "your *business.*"], { x: 110, y: 96, size: 76, after: tFind - 0.1, out: tEnd + 0.02 });
+    const u1 = P("seekworthy.ai") - 0.05, u2 = P("enter your website") + 0.05, tap = P("free check") + 0.2;
+    sfx(tGo - 0.03, "whoosh_short", -21);
+    sfx(u1 + 0.05, "type", -21, { text: "seekworthy.ai", dur: 0.6 });
+    sfx(u2 + 0.05, "type", -21, { text: "closewise.com", dur: 0.6 });
+    sfx(tap, "ui_click", -11);
+    sfx(P("No card") - 0.02, "pop", -21);
+    return (t) => {
+      a.update(t); b.update(t);
+      show(inp.wrap, t, tGo, tFind + 0.1, { dy: -20, scale: 0.96 });
+      if (t < u2) inp.update(t, "seekworthy.ai", u1, u1 + 0.6, null, "");
+      else inp.update(t, "closewise.com", u2, u2 + 0.6, tap, "yourcompany.com");
+      show(no, t, P("No card") - 0.05, tFind + 0.1, { dy: -10, scale: 0.92, din: 0.35, e: E.outBack });
+    };
+  });
 
+  // ---------------- END: flat blue -> "Is yours?" -> gradient bloom -> logo
+  key(tEnd - 0.001, { z: 1.04 }, "lin");
+  key(tEnd, { show: 0 }, "step");
+  beat("back", tEnd - 0.02, END + 1, (r) => {
+    canvas(r, "blue");
+    const grad = $("div", "abs", r);
+    css(grad, { left: 0, top: 0, width: `${W}px`, height: `${H}px`, background: "radial-gradient(1200px 900px at 100% 0%, rgba(95,208,255,1), rgba(95,208,255,0) 70%), radial-gradient(700px 520px at 88% 18%, rgba(255,255,255,.85), rgba(255,255,255,0) 70%), radial-gradient(900px 700px at 10% 100%, rgba(170,190,255,.55), rgba(170,190,255,0) 70%), radial-gradient(1300px 900px at 0% 100%, rgba(52,80,242,1), rgba(52,80,242,0) 75%)" });
+    return (t) => {
+      const g = tw(t, tEnd + 0.75, tEnd + 1.6, E.inOutCubic);
+      grad.style.opacity = g.toFixed(3);
+      grad.style.transform = `translate(${(1 - g) * 300}px, ${(1 - g) * -200}px) scale(${lerp(1.3, 1, g)})`;
+    };
+  });
+  beat("front", tEnd - 0.02, END + 1, (r) => {
+    const q = $("div", "abs", r, `<span class="a w">Is</span> <span class="b w">yours?</span>`);
+    css(q, { left: 0, width: `${W}px`, top: "450px", textAlign: "center", fontSize: "130px", fontWeight: 400, letterSpacing: "-0.04em", color: "#fff" });
+    const lock = $("div", "abs", r);
+    css(lock, { left: 0, width: `${W}px`, top: "430px", display: "flex", justifyContent: "center", alignItems: "center", gap: "30px" });
+    const mk = $("div", "", lock, `<img src="${MARK}" style="width:150px;height:140px;filter:brightness(0) invert(1)">`);
+    const wm = $("div", "", lock, "Seekworthy");
+    css(wm, { fontFamily: "Geist", fontSize: "140px", fontWeight: 600, letterSpacing: "-0.045em", color: "#fff" });
+    const url = $("div", "abs", r, "Start your free check at seekworthy.ai");
+    css(url, { left: 0, width: `${W}px`, top: "960px", textAlign: "center", fontSize: "30px", color: "#fff" });
+    const qa = q.querySelector(".a"), qb = q.querySelector(".b");
+    sfx(tEnd - 0.04, "woosh_quick", -14);
+    sfx(tEnd + 0.75, "revcym_glassy", -16);
+    sfx(tEnd + 1.55, "subdrop", -10);
+    sfx(tEnd + 1.6, "shimmer_success", -14);
+    return (t) => {
+      show(qa, t, tEnd + 0.12, tEnd + 1.35, { dy: 18, blur: 10, din: 0.4, dout: 0.3, blurOut: 16 });
+      show(qb, t, tEnd + 0.3, tEnd + 1.35, { dy: 18, blur: 10, din: 0.4, dout: 0.3, blurOut: 16 });
+      const k = tw(t, tEnd + 1.45, tEnd + 2.05, E.outExpo);
+      mk.style.opacity = k.toFixed(3);
+      mk.style.transform = `scale(${lerp(0.7, 1, tw(t, tEnd + 1.45, tEnd + 1.95, E.outBack))})`;
+      const w = tw(t, tEnd + 1.55, tEnd + 2.2, E.outQuint);
+      wm.style.clipPath = `inset(0 ${lerp(100, 0, w)}% 0 0)`;
+      wm.style.transform = `translateX(${lerp(-40, 0, w)}px)`;
+      show(url, t, tEnd + 2.0, null, { dy: 12, din: 0.5 });
+      lock.style.transform = `scale(${lerp(1, 1.03, tw(t, tEnd + 1.5, END, E.lin))})`;
+    };
+  });
+
+  // ---------------------------------------------------------------- render
   window.renderFrame = (f) => {
     const t = f / FPS;
     for (const b of beats) {
       const on = t >= b.t0 && t <= b.t1;
       b.root.style.display = on ? "block" : "none";
       if (on) b.update(t);
-    }
-    const c = window.CAPTIONS.find((x) => t >= x.s && t < x.e);
-    const off = CAP_OFF.some(([a, b]) => t >= a && t < b);
-    if (c && !off) {
-      // reveal the chunk word by word on the spoken word times
-      const parts = c.t.split(" ");
-      const start = c.i;
-      cap.innerHTML = parts.map((p, i) => {
-        const w = start >= 0 ? W8[start + i] : null;
-        const k = w ? tw(t, w.s - 0.06, w.s + 0.2, E.outCubic) : 1;
-        return `<span style="display:inline-block;opacity:${k.toFixed(3)};filter:blur(${(5 * (1 - k)).toFixed(2)}px);transform:translateY(${(6 * (1 - k)).toFixed(1)}px)">${p}</span>`;
-      }).join(" ");
-      capWrap.style.opacity = tw(t, c.s, c.s + 0.1).toFixed(3);
-    } else {
-      capWrap.style.opacity = "0";
     }
   };
 })();

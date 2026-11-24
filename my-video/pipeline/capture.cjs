@@ -1,6 +1,7 @@
 // Capture the graphics timeline as transparent PNG frames.
 //   node pipeline/capture.cjs [--frames a-b | --at f1,f2,...] [--workers 4] [--out build/gfx]
-// Writes <out>/back/NNNNN.png and <out>/front/NNNNN.png (RGBA, 1920x1080).
+// Writes <out>/{back,front,glass}/NNNNN.png (RGBA, 1920x1080) and <out>/plate.json.
+// glass = white where frosted panels sit (the compositor blurs the picture there).
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
@@ -23,7 +24,7 @@ const page = "file://" + path.resolve(__dirname, "gfx/index.html");
     frames = [];
     for (let f = a; f <= b; f++) frames.push(f);
   }
-  for (const l of ["back", "front"]) fs.mkdirSync(path.join(out, l), { recursive: true });
+  for (const l of ["back", "front", "glass"]) fs.mkdirSync(path.join(out, l), { recursive: true });
   const browser = await chromium.launch();
   const chunk = Math.ceil(frames.length / workers);
   const t0 = Date.now();
@@ -39,7 +40,7 @@ const page = "file://" + path.resolve(__dirname, "gfx/index.html");
     });
     for (const f of mine) {
       await p.evaluate((f) => window.renderFrame(f), f);
-      for (const l of ["back", "front"]) {
+      for (const l of ["back", "front", "glass"]) {
         await p.evaluate((l) => { document.body.dataset.layer = l; }, l);
         await p.screenshot({ path: path.join(out, l, String(f).padStart(5, "0") + ".png"), omitBackground: true });
       }
@@ -48,6 +49,13 @@ const page = "file://" + path.resolve(__dirname, "gfx/index.html");
     }
     await p.close();
   }));
+  // plate track (Ben's framing / card / blur per frame) for the compositor
+  const pp = await browser.newPage();
+  await pp.goto(page);
+  const plate = await pp.evaluate((n) => { const out = []; for (let f = 0; f < n; f++) out.push(window.plate ? window.plate(f) : null); return out; }, total);
+  fs.writeFileSync(path.join(out, "plate.json"), JSON.stringify(plate));
+  // sound cues placed by the timeline on the same events
+  fs.writeFileSync(path.join(out, "sfx.json"), JSON.stringify(await pp.evaluate(() => window.SFX || []), null, 0));
   await browser.close();
   console.log(`captured ${frames.length} frames in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
 })();

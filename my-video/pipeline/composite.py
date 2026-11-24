@@ -180,44 +180,87 @@ def load_rgba(p):
     return rgb, a
 
 
+PLATE = None
+if os.path.exists(f"{args.gfx}/plate.json"):
+    PLATE = json.load(open(f"{args.gfx}/plate.json"))
+
+
+def rounded_mask(x, y, w, h, r):
+    m = np.zeros((H, W), np.uint8)
+    x0, y0, x1, y1 = int(round(x)), int(round(y)), int(round(x + w)), int(round(y + h))
+    r = int(max(0, min(r, (x1 - x0) / 2, (y1 - y0) / 2)))
+    if x1 <= x0 or y1 <= y0:
+        return m.astype(np.float32)[..., None]
+    cv2.rectangle(m, (x0 + r, y0), (x1 - r, y1), 255, -1)
+    cv2.rectangle(m, (x0, y0 + r), (x1, y1 - r), 255, -1)
+    for cx, cy in ((x0 + r, y0 + r), (x1 - r, y0 + r), (x0 + r, y1 - r), (x1 - r, y1 - r)):
+        cv2.circle(m, (cx, cy), r, 255, -1, lineType=cv2.LINE_AA)
+    m = cv2.GaussianBlur(m, (3, 3), 0)
+    return (m.astype(np.float32) / 255)[..., None]
+
+
+def plate_affine(P):
+    """Camera framing from the timeline's plate track: zoom about an anchor."""
+    S = BASE_SCALE * P["z"]
+    px, py = P["ax"] * SW, P["ay"] * SH
+    ox, oy = P["ax"] * W, P["ay"] * H
+    return np.float32([[S, 0, ox - px * S], [0, S, oy - py * S]]), P["z"]
+
+
 def frame(f, plate_bgr, alpha8):
     t = f / FPS
-    M, s = affine(t)
+    P = PLATE[min(f, len(PLATE) - 1)] if PLATE else None
+    M, s = plate_affine(P) if P else affine(t)
     rgb = plate_bgr[..., ::-1].astype(np.float32) / 255
     a = alpha8.astype(np.float32) / 255
-    if V1:
-        ben = grade_v1(rgb)
-    else:
-        ben = grade_v2(rgb, a)
-    # 720p -> 1080p with the shot's zoom/position
+    ben = grade_v1(rgb) if V1 else grade_v2(rgb, a)
     big = cv2.warpAffine(ben, M, (W, H), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
     A = cv2.warpAffine(a, M, (W, H), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)[..., None]
-    # mild sharpen to offset the enlargement
-    amt = 0.35 + 0.35 * (s - 1) / 0.22
-    blur = cv2.GaussianBlur(big, (0, 0), 1.2)
-    big = np.clip(big + (big - blur) * amt, 0, 1)
-
-    if V1:
-        base = studio.copy()
-        # rim light + spill suppression on the matte edge
-        Ab = cv2.GaussianBlur(A[..., 0], (0, 0), 6)[..., None]
-        edge = np.clip(A - Ab, 0, 1) * 2.2
-        big = big * (1 - edge * 0.35) + RIM * edge * 0.55
-        # gentle shadow of Ben on the backdrop for depth
-        sh = cv2.GaussianBlur(A[..., 0], (0, 0), 28)[..., None]
-        sh = cv2.warpAffine(sh, np.float32([[1, 0, 10], [0, 1, 18]]), (W, H))[..., None]
-        base = base * (1 - sh * 0.35)
-    else:
-        base = big
+    amt = 0.35 + 0.45 * max(0.0, s - 1) / 0.3
+    bl = cv2.GaussianBlur(big, (0, 0), 1.2)
+    big = np.clip(big + (big - bl) * amt, 0, 1)
     back_rgb, back_a = load_rgba(f"{args.gfx}/back/{f:05d}.png")
-    if back_rgb is not None:
-        base = base * (1 - back_a) + back_rgb * back_a
-    out = base * (1 - A) + big * A
-    out = out * vig
+    full = (P is None) or (P["w"] >= W - 1 and P["h"] >= H - 1 and P["x"] <= 0.5 and P["y"] <= 0.5)
+    show = (P is None) or P.get("show", 1) > 0
+
+    if show and full:
+        cam = big
+        if P and P.get("blur", 0) > 0.3:
+            cam = cv2.GaussianBlur(cam, (0, 0), P["blur"])
+        if P and P.get("dim", 0) > 0:
+            cam = cam * (1 - P["dim"])
+        out = cam.copy()
+        if back_rgb is not None:
+            out = out * (1 - back_a) + back_rgb * back_a
+        if not (P and P.get("blur", 0) > 0.3):
+            out = out * (1 - A) + cam * A          # Ben back in front of the back layer
+        out = out * vig
+    else:
+        out = back_rgb * back_a if back_rgb is not None else np.zeros((H, W, 3), np.float32)
+        if show:
+            # footage inside a rounded card: scale the framed picture into the card rect (cover fit)
+            x, y, w, h, r = P["x"], P["y"], P["w"], P["h"], P["r"]
+            if w > 2 and h > 2:
+                sc = max(w / W, h / H)
+                M2 = np.float32([[sc, 0, x + (w - W * sc) / 2], [0, sc, y + (h - H * sc) / 2]])
+                card = cv2.warpAffine(big * vig, M2, (W, H), flags=cv2.INTER_AREA if sc < 1 else cv2.INTER_CUBIC)
+                if P.get("blur", 0) > 0.3:
+                    card = cv2.GaussianBlur(card, (0, 0), P["blur"])
+                if P.get("dim", 0) > 0:
+                    card = card * (1 - P["dim"])
+                m = rounded_mask(x, y, w, h, r) * P.get("op", 1.0)
+                sh = cv2.GaussianBlur(np.roll(m[..., 0], int(18 * sc + 6), axis=0), (0, 0), 30 * sc + 8)[..., None]
+                out = out * (1 - sh * 0.28 * P.get("op", 1.0))
+                out = out * (1 - m) + card * m
+    glass_rgb, glass_a = load_rgba(f"{args.gfx}/glass/{f:05d}.png") if os.path.exists(f"{args.gfx}/glass") else (None, None)
+    if glass_a is not None:
+        g = glass_a
+        frosted = cv2.GaussianBlur(out, (0, 0), 28)
+        out = out * (1 - g) + frosted * g
     front_rgb, front_a = load_rgba(f"{args.gfx}/front/{f:05d}.png")
     if front_rgb is not None:
         out = out * (1 - front_a) + front_rgb * front_a
-    out = out + GRAIN[f % len(GRAIN)] * 0.012
+    out = out + GRAIN[f % len(GRAIN)] * 0.010
     return (np.clip(out, 0, 1) * 255 + 0.5).astype(np.uint8)
 
 

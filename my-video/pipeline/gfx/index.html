@@ -4,66 +4,50 @@
 <meta charset="utf-8">
 <title>Seekworthy launch graphics</title>
 <style>
-/* Type system modelled on the reference (Söhne grotesk, light/regular, with
-   italic-serif emphasis words). Söhne is a commercial Klim face, so the
-   closest open-licence match is used: Inter Tight + Instrument Serif Italic.
-   To use a licensed Söhne, point --sans at it here; nothing else changes. */
+/* Type: the reference uses Söhne (commercial). Inter Tight is the closest
+   open-licence match; point --sans at a licensed Söhne to swap. */
 @font-face { font-family: "Inter Tight"; src: url("../../assets/fonts/InterTight-var.woff2") format("woff2"); font-weight: 100 900; }
-@font-face { font-family: "Instrument Serif"; src: url("../../assets/fonts/InstrumentSerif-Italic.woff2") format("woff2"); font-style: italic; font-weight: 400; }
 @font-face { font-family: "Geist"; src: url("../../assets/fonts/Geist-variable-latin.woff2") format("woff2"); font-weight: 100 900; }
 
-/* Seekworthy colours only (seekworthy.ai stylesheet + the logo's own gradient) */
+/* Seekworthy colours only: the reference's flat brand red becomes
+   Seekworthy blue; its red/cyan/white gradient becomes blue/cyan/white;
+   lime is the key-word accent on footage. */
 :root {
   --sans: "Inter Tight", "Inter", sans-serif;
-  --serif: "Instrument Serif", Georgia, serif;
-  --navy: #0f1b4c;
-  --night: #050a22;
-  --lime: #b8ff3c;
   --blue: #3f5efb;
-  --blue-bright: #647cf4;
   --blue-deep: #2743c9;
-  --logo-deep: #002afe;
-  --logo-cyan: #00baff;
-  --mist: #c9d2ff;
+  --blue-soft: #c9d4ff;
+  --cyan: #5fd0ff;
+  --lime: #b8ff3c;
   --ink: #0f1b4c;
   --body: #2b3560;
-  --muted: #5b6386;
-  --faint: #9aa2c0;
-  --line: #dcdfe8;
-  --line-soft: #e9ecf3;
-  --surface: #f3f5fa;
-  --danger: #c81f37;
-  --c-n: #d6608a; --c-v: #3f5efb; --c-b: #2aa5b0; --c-c: #e0913a; --c-m: #8b5cf6;
-  --shadow: 0 2px 6px -2px rgba(5,10,34,.25), 0 30px 60px -20px rgba(5,10,34,.45), 0 80px 140px -60px rgba(5,10,34,.6);
+  --muted: #6b7394;
+  --faint: #a3aac4;
+  --line: #e4e7f0;
+  --surface: #f5f7fb;
+  --danger: #d6334a;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
-body { font-family: var(--sans); color: #fff; -webkit-font-smoothing: antialiased; font-feature-settings: "ss01", "cv11"; }
+body { font-family: var(--sans); color: #fff; -webkit-font-smoothing: antialiased; }
 .layer { position: absolute; inset: 0; overflow: hidden; }
 body[data-layer="back"] #front { display: none; }
-body[data-layer="front"] #back { display: none; }
+body[data-layer="front"] #back, body[data-layer="glass"] #back { display: none; }
+/* glass layer: only the frosted panels, as solid white masks */
+body[data-layer="glass"] #front * { visibility: hidden; }
+body[data-layer="glass"] #front .glass { visibility: visible; background: #fff !important; border-color: #fff !important; box-shadow: none !important; }
 .abs { position: absolute; }
-.word { display: inline-block; white-space: pre; will-change: transform, opacity, filter; }
-.serif { font-family: var(--serif); font-style: italic; font-weight: 400; letter-spacing: -0.01em; }
-.grad { background: linear-gradient(180deg, #ffffff 18%, #e9ffc6 62%, #b8ff3c 112%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.gradb { background: linear-gradient(180deg, #ffffff 20%, #c9d2ff 75%, #8ea0ff 115%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.card { background: #fff; border-radius: 30px; box-shadow: var(--shadow); color: var(--ink); }
-.glass { background: rgba(255,255,255,0.07); border: 1.5px solid rgba(255,255,255,0.16); border-radius: 26px; }
-.pill { display: inline-flex; align-items: center; gap: 14px; background: #fff; color: var(--ink); border-radius: 999px; box-shadow: 0 20px 50px -18px rgba(5,10,34,.55); }
-.label { font-size: 28px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.fav { display: inline-flex; align-items: center; justify-content: center; color: #fff; font-weight: 600; border-radius: 50%; flex: none; }
-.screen { position: absolute; inset: 0; overflow: hidden; }
-.night {
-  background:
-    radial-gradient(900px 620px at 12% 108%, rgba(0,186,255,0.42), rgba(0,186,255,0) 70%),
-    radial-gradient(1100px 700px at 88% 112%, rgba(0,42,254,0.62), rgba(0,42,254,0) 70%),
-    radial-gradient(1200px 700px at 50% -20%, rgba(63,94,251,0.22), rgba(63,94,251,0) 70%),
-    #050a22;
-}
-.frames { position: absolute; inset: 0; pointer-events: none; }
-.frames i { position: absolute; background: rgba(255,255,255,0.07); }
-#captions { position: absolute; left: 0; right: 0; bottom: 92px; display: flex; justify-content: center; }
-#cap { font-size: 44px; font-weight: 400; letter-spacing: -0.012em; color: #f2f4ff; text-shadow: 0 2px 22px rgba(5,10,34,0.55), 0 0 2px rgba(5,10,34,0.35); white-space: nowrap; }
+.w { display: inline-block; white-space: pre; }
+
+/* frosted panels over footage (the compositor blurs what is behind .glass) */
+.gd { background: rgba(28, 30, 44, 0.34); border: 1.5px solid rgba(255,255,255,0.22); border-radius: 22px; box-shadow: 0 24px 60px -24px rgba(0,0,0,.45); }
+.gl { background: rgba(255,255,255,0.42); border: 1.5px solid rgba(255,255,255,0.75); border-radius: 26px; box-shadow: 0 30px 80px -30px rgba(15,27,76,.35); }
+.card { background: #fff; border-radius: 22px; color: var(--ink); box-shadow: 0 1px 2px rgba(15,27,76,.06), 0 18px 40px -18px rgba(15,27,76,.28); }
+.pill { display: inline-flex; align-items: center; gap: 14px; }
+.tag { font-size: 22px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; padding: 4px 12px; border-radius: 8px; }
+.fav { display: inline-flex; align-items: center; justify-content: center; color: #fff; font-weight: 600; border-radius: 12px; flex: none; }
+.btn { display: inline-flex; align-items: center; gap: 10px; background: var(--blue); color: #fff; font-weight: 500; border-radius: 12px; }
+.ribs { background-image: repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0 2px, rgba(255,255,255,0) 2px 56px); }
 </style>
 </head>
 <body data-layer="front">
